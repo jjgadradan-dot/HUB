@@ -570,6 +570,33 @@ a{color:inherit;text-decoration:none}
 
 @media(max-width:500px){.sub-grid{grid-template-columns:1fr}.sub-card-stats{grid-template-columns:repeat(3,1fr)}}
 
+/* ══════ آموزش انتقال پنل ══════ */
+.mig-hero{background:linear-gradient(135deg,rgba(59,130,246,.16),rgba(139,92,246,.12));border:1px solid var(--card-bh);border-radius:22px;padding:24px;margin-bottom:18px;position:relative;overflow:hidden}
+.mig-hero::after{content:'';position:absolute;left:-60px;top:-80px;width:230px;height:230px;border-radius:50%;background:radial-gradient(circle,rgba(139,92,246,.22),transparent 68%)}
+.mig-hero-title{font-size:18px;font-weight:800;color:var(--t1);display:flex;align-items:center;gap:9px;position:relative;z-index:1}
+.mig-hero-sub{font-size:11.5px;color:var(--t2);line-height:1.9;margin-top:7px;max-width:720px;position:relative;z-index:1}
+.mig-flow{display:grid;grid-template-columns:1fr auto 1fr auto 1fr;align-items:center;gap:10px;margin:16px 0 20px}
+.mig-flow-item{background:var(--card);border:1px solid var(--card-b);border-radius:15px;padding:14px;text-align:center;font-size:11px;color:var(--t2);font-weight:700}
+.mig-flow-item i{display:block;font-size:22px;color:var(--accent);margin-bottom:7px}
+.mig-flow-arrow{color:var(--accent);font-size:20px}
+.mig-section{background:var(--card);border:1px solid var(--card-b);border-radius:20px;overflow:hidden;margin-bottom:16px}
+.mig-section-head{display:flex;align-items:center;gap:12px;padding:18px 20px;background:var(--accent-d);border-bottom:1px solid var(--card-b)}
+.mig-section-num{width:34px;height:34px;border-radius:11px;background:var(--accent);color:#fff;display:flex;align-items:center;justify-content:center;font-weight:800;flex-shrink:0}
+.mig-section-title{font-size:14px;font-weight:800;color:var(--t1)}
+.mig-section-sub{font-size:10px;color:var(--t3);margin-top:2px}
+.mig-steps{padding:8px 20px 18px}
+.mig-step{display:flex;gap:12px;padding:14px 0;border-bottom:1px solid var(--card-b)}
+.mig-step:last-child{border-bottom:none}
+.mig-step-num{width:27px;height:27px;border-radius:50%;background:var(--accent-d);border:1px solid var(--card-bh);color:var(--accent2);display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:800;flex-shrink:0}
+.mig-step-body{flex:1;min-width:0}
+.mig-step-title{font-size:12.5px;font-weight:800;color:var(--t1);margin-bottom:4px}
+.mig-step-text{font-size:11px;color:var(--t2);line-height:1.9}
+.mig-code{direction:ltr;text-align:left;background:rgba(0,0,0,.22);border:1px solid var(--card-b);border-radius:9px;padding:9px 12px;margin-top:8px;font-family:ui-monospace,monospace;font-size:10.5px;color:var(--accent2);word-break:break-all;user-select:all}
+[data-theme="light"] .mig-code{background:rgba(37,99,235,.05)}
+.mig-check{display:flex;align-items:flex-start;gap:8px;background:var(--green-bg);border:1px solid rgba(16,185,129,.2);color:var(--green-t);padding:11px 13px;border-radius:11px;font-size:11px;line-height:1.8;margin-top:10px}
+.mig-danger{display:flex;align-items:flex-start;gap:8px;background:var(--red-bg);border:1px solid rgba(239,68,68,.2);color:var(--red-t);padding:11px 13px;border-radius:11px;font-size:11px;line-height:1.8;margin-top:10px}
+@media(max-width:650px){.mig-flow{grid-template-columns:1fr}.mig-flow-arrow{transform:rotate(90deg);text-align:center}.mig-hero{padding:19px}.mig-steps{padding:6px 15px 14px}}
+
 .modal-bg{display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:500;align-items:center;justify-content:center;backdrop-filter:blur(4px)}
 .modal-bg.open{display:flex}
 .modal{background:var(--card);border:1px solid var(--card-b);border-radius:20px;padding:28px 26px;max-width:520px;width:calc(100% - 32px);max-height:90vh;overflow-y:auto;position:relative;animation:fi .2s ease}
@@ -823,6 +850,7 @@ a{color:inherit;text-decoration:none}
     <div class="nav-it" data-pg="logs"><i class="ti ti-history"></i> لاگ فعالیت‌ها</div>
     <div class="nav-it" data-pg="errors"><i class="ti ti-alert-triangle"></i> خطاها</div>
     <div class="nav-it" data-pg="testws"><i class="ti ti-wifi"></i> تست WebSocket</div>
+    <div class="nav-it" data-pg="migration"><i class="ti ti-book-2"></i> آموزش انتقال پنل</div>
     <div class="nav-it" data-pg="backup"><i class="ti ti-cloud-upload"></i> بکاپ و بازیابی</div>
     <div class="nav-it" data-pg="settings"><i class="ti ti-settings"></i> تنظیمات</div>
     <div class="nav-it" data-pg="support"><i class="ti ti-headset"></i> پشتیبانی</div>
@@ -1210,10 +1238,77 @@ a{color:inherit;text-decoration:none}
     </div>
   </div>
 </section>
+<section class="pg" id="pg-migration">
+  <div class="topbar">
+    <div><div class="tb-title"><i class="ti ti-book-2"></i> آموزش انتقال پنل</div><div class="tb-sub">راهنمای جدا و مرحله‌به‌مرحله برای وقتی پنل قدیمی خراب می‌شود</div></div>
+    <div class="tb-right"><button class="btn btn-p" onclick="navTo('backup')"><i class="ti ti-cloud-upload"></i> رفتن به بکاپ</button></div>
+  </div>
+
+  <div class="mig-hero">
+    <div class="mig-hero-title"><i class="ti ti-lifebuoy"></i> هدف خیلی ساده چیست؟</div>
+    <div class="mig-hero-sub">لینک ساب مشتری همیشه روی <b>ping101.kdns.fr</b> می‌ماند. وقتی پنل عوض شد، مشتری لینک تازه نمی‌گیرد؛ فقط Update Subscription می‌زند و کانفیگ با دامنه Railway جدید دریافت می‌کند.</div>
+  </div>
+
+  <div class="mig-flow">
+    <div class="mig-flow-item"><i class="ti ti-cloud-upload"></i> بکاپ در تلگرام</div>
+    <div class="mig-flow-arrow"><i class="ti ti-arrow-left"></i></div>
+    <div class="mig-flow-item"><i class="ti ti-server-2"></i> ساخت پنل Railway جدید</div>
+    <div class="mig-flow-arrow"><i class="ti ti-arrow-left"></i></div>
+    <div class="mig-flow-item"><i class="ti ti-refresh"></i> مشتری فقط ساب را Update می‌کند</div>
+  </div>
+
+  <div class="mig-section">
+    <div class="mig-section-head"><div class="mig-section-num">۱</div><div><div class="mig-section-title">کارهایی که همین حالا روی پنل سالم انجام بده</div><div class="mig-section-sub">این بخش را قبل از خراب‌شدن پنل انجام بده</div></div></div>
+    <div class="mig-steps">
+      <div class="mig-step"><div class="mig-step-num">۱</div><div class="mig-step-body"><div class="mig-step-title">تلگرام را تنظیم کن</div><div class="mig-step-text">از منو وارد «بکاپ و بازیابی» شو. توکن ربات، آیدی ادمین و آیدی چت بکاپ را وارد کن؛ سپس «ذخیره تنظیمات» و بعد «تست اتصال» را بزن.</div></div></div>
+      <div class="mig-step"><div class="mig-step-num">۲</div><div class="mig-step-body"><div class="mig-step-title">دامنه ثابت ساب را ثبت کن</div><div class="mig-step-text">در کادر دامنه ثابت این مقدار را وارد کن و «ذخیره دامنه» را بزن:</div><div class="mig-code">https://ping101.kdns.fr</div></div></div>
+      <div class="mig-step"><div class="mig-step-num">۳</div><div class="mig-step-body"><div class="mig-step-title">یک بکاپ تازه بفرست</div><div class="mig-step-text">دکمه «ارسال بکاپ الان» را بزن. داخل تلگرام باید یک فایل JSON دریافت کنی و پیام آن باید Pin شده باشد.</div></div></div>
+      <div class="mig-step"><div class="mig-step-num">۴</div><div class="mig-step-body"><div class="mig-step-title">فایل را نگه دار</div><div class="mig-step-text">برای اطمینان، فایل JSON تلگرام را یک‌بار دانلود و در گوشی یا کامپیوتر نگه دار.</div><div class="mig-check"><i class="ti ti-circle-check"></i><span>اگر فایل JSON و پیام پین‌شده را داری، برای روز خرابی آماده‌ای.</span></div></div></div>
+    </div>
+  </div>
+
+  <div class="mig-section">
+    <div class="mig-section-head"><div class="mig-section-num">۲</div><div><div class="mig-section-title">ساخت پنل جدید از GitHub</div><div class="mig-section-sub">وقتی پنل قدیمی دیگر کار نمی‌کند</div></div></div>
+    <div class="mig-steps">
+      <div class="mig-step"><div class="mig-step-num">۱</div><div class="mig-step-body"><div class="mig-step-title">آخرین کد را در GitHub آماده کن</div><div class="mig-step-text">در GitHub مطمئن شو تغییرات Pull Request وارد شاخه <b>main</b> شده‌اند. بعد در Railway گزینه Deploy from GitHub Repo را بزن و همین مخزن HUB را انتخاب کن.</div><div class="mig-code">Repository: jjgadradan-dot/HUB &nbsp; | &nbsp; Branch: main</div></div></div>
+      <div class="mig-step"><div class="mig-step-num">۲</div><div class="mig-step-body"><div class="mig-step-title">صبر کن Deploy سبز شود</div><div class="mig-step-text">در قسمت Deployments صبر کن وضعیت به Success برسد. اگر قرمز بود، اول لاگ خطا را بررسی کن.</div></div></div>
+      <div class="mig-step"><div class="mig-step-num">۳</div><div class="mig-step-body"><div class="mig-step-title">Volume دائمی بساز</div><div class="mig-step-text">در Railway یک Volume بساز، مسیر آن را <b>/data</b> قرار بده و این Variable را ثبت کن:</div><div class="mig-code">DATA_DIR=/data</div></div></div>
+      <div class="mig-step"><div class="mig-step-num">۴</div><div class="mig-step-body"><div class="mig-step-title">دامنه Railway جدید را پیدا کن</div><div class="mig-step-text">از Settings → Networking دامنه‌ای که به <b>up.railway.app</b> ختم می‌شود کپی کن. سپس در Variables این مقدار را بدون https وارد کن:</div><div class="mig-code">CONFIG_PUBLIC_HOST=new-panel.up.railway.app</div></div></div>
+    </div>
+  </div>
+
+  <div class="mig-section">
+    <div class="mig-section-head"><div class="mig-section-num">۳</div><div><div class="mig-section-title">برگرداندن اطلاعات روی پنل جدید</div><div class="mig-section-sub">UUIDها و گروه‌های قدیمی دوباره بالا می‌آیند</div></div></div>
+    <div class="mig-steps">
+      <div class="mig-step"><div class="mig-step-num">۱</div><div class="mig-step-body"><div class="mig-step-title">وارد پنل جدید شو</div><div class="mig-step-text">دامنه Railway جدید را باز کن، به /dashboard برو و با رمز پنل وارد شو. اگر هنوز بازیابی نشده، رمز اولیه X4GKING است.</div></div></div>
+      <div class="mig-step"><div class="mig-step-num">۲</div><div class="mig-step-body"><div class="mig-step-title">همان تلگرام قبلی را تنظیم کن</div><div class="mig-step-text">در «بکاپ و بازیابی» همان توکن ربات و همان آیدی چت قبلی را وارد و ذخیره کن.</div></div></div>
+      <div class="mig-step"><div class="mig-step-num">۳</div><div class="mig-step-body"><div class="mig-step-title">آخرین بکاپ را Restore کن</div><div class="mig-step-text">«بازیابی آخرین بکاپ تلگرام» را بزن. اگر جواب نداد، فایل JSON ذخیره‌شده را انتخاب کن و «بازیابی فایل انتخاب‌شده» را بزن.</div></div></div>
+      <div class="mig-step"><div class="mig-step-num">۴</div><div class="mig-step-body"><div class="mig-step-title">دو دامنه را کنترل کن</div><div class="mig-step-text">بعد از بازیابی باید دامنه ثابت ساب و دامنه اتصال کانفیگ دو مقدار متفاوت باشند:</div><div class="mig-code">Subscription: https://ping101.kdns.fr<br>Config host: new-panel.up.railway.app</div></div></div>
+    </div>
+  </div>
+
+  <div class="mig-section">
+    <div class="mig-section-head"><div class="mig-section-num">۴</div><div><div class="mig-section-title">وصل‌کردن دامنه ثابت به پنل جدید</div><div class="mig-section-sub">مهم‌ترین مرحله برای اینکه لینک مشتری عوض نشود</div></div></div>
+    <div class="mig-steps">
+      <div class="mig-step"><div class="mig-step-num">۱</div><div class="mig-step-body"><div class="mig-step-title">Custom Domain را به Railway جدید اضافه کن</div><div class="mig-step-text">در سرویس جدید وارد Settings → Networking شو، Add Custom Domain را بزن و دامنه زیر را اضافه کن:</div><div class="mig-code">ping101.kdns.fr</div></div></div>
+      <div class="mig-step"><div class="mig-step-num">۲</div><div class="mig-step-body"><div class="mig-step-title">رکورد DNS را عوض کن</div><div class="mig-step-text">Railway یک Target به تو می‌دهد. در مدیریت DNS رکورد CNAME مربوط به ping101 را به همان Target جدید تغییر بده.</div><div class="mig-code">Type: CNAME &nbsp; | &nbsp; Name: ping101 &nbsp; | &nbsp; Target: Railway new target</div></div></div>
+      <div class="mig-step"><div class="mig-step-num">۳</div><div class="mig-step-body"><div class="mig-step-title">سلامت دامنه را آزمایش کن</div><div class="mig-step-text">چند دقیقه صبر کن و این آدرس را باز کن:</div><div class="mig-code">https://ping101.kdns.fr/health</div><div class="mig-check"><i class="ti ti-circle-check"></i><span>اگر status برابر ok بود، دامنه ثابت به پنل جدید وصل شده است.</span></div></div></div>
+      <div class="mig-step"><div class="mig-step-num">۴</div><div class="mig-step-body"><div class="mig-step-title">مشتری فقط Update بزند</div><div class="mig-step-text">هیچ لینک جدیدی برای مشتری نفرست. مشتری در برنامه V2Ray گزینه Update Subscription را می‌زند و کانفیگ با Railway جدید دریافت می‌کند.</div></div></div>
+    </div>
+  </div>
+
+  <div class="mig-section">
+    <div class="mig-section-head"><div class="mig-section-num">✓</div><div><div class="mig-section-title">کنترل نهایی</div><div class="mig-section-sub">قبل از اعلام آماده‌بودن سرویس</div></div></div>
+    <div class="mig-steps">
+      <div class="mig-danger"><i class="ti ti-alert-triangle"></i><span>پنل قدیمی را تا وقتی /health دامنه ثابت روی پنل جدید باز نشده حذف نکن.</span></div>
+      <div class="mig-check"><i class="ti ti-checks"></i><span>بکاپ Restore شده · گروه‌ها دیده می‌شوند · ساب روی ping101.kdns.fr است · کانفیگ داخل ساب دامنه Railway جدید دارد · اتصال تست شده است.</span></div>
+    </div>
+  </div>
+</section>
 <section class="pg" id="pg-backup">
   <div class="topbar">
     <div><div class="tb-title"><i class="ti ti-cloud-upload"></i> بکاپ و بازیابی</div><div class="tb-sub">انتقال کامل کانفیگ‌ها، مصرف‌ها و گروه‌های ساب با همان شناسه‌ها</div></div>
-    <div class="tb-right"><span class="badge bg-blue" id="backup-ready">در حال بررسی...</span></div>
+    <div class="tb-right"><button class="btn btn-o" onclick="navTo('migration')"><i class="ti ti-book-2"></i> آموزش انتقال</button><span class="badge bg-blue" id="backup-ready">در حال بررسی...</span></div>
   </div>
   <div class="create-panel">
     <div class="cp-head">
