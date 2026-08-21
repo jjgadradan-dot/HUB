@@ -823,6 +823,7 @@ a{color:inherit;text-decoration:none}
     <div class="nav-it" data-pg="logs"><i class="ti ti-history"></i> لاگ فعالیت‌ها</div>
     <div class="nav-it" data-pg="errors"><i class="ti ti-alert-triangle"></i> خطاها</div>
     <div class="nav-it" data-pg="testws"><i class="ti ti-wifi"></i> تست WebSocket</div>
+    <div class="nav-it" data-pg="backup"><i class="ti ti-cloud-upload"></i> بکاپ و بازیابی</div>
     <div class="nav-it" data-pg="settings"><i class="ti ti-settings"></i> تنظیمات</div>
     <div class="nav-it" data-pg="support"><i class="ti ti-headset"></i> پشتیبانی</div>
   </div>
@@ -1209,6 +1210,48 @@ a{color:inherit;text-decoration:none}
     </div>
   </div>
 </section>
+<section class="pg" id="pg-backup">
+  <div class="topbar">
+    <div><div class="tb-title"><i class="ti ti-cloud-upload"></i> بکاپ و بازیابی</div><div class="tb-sub">انتقال کامل کانفیگ‌ها، مصرف‌ها و گروه‌های ساب با همان شناسه‌ها</div></div>
+    <div class="tb-right"><span class="badge bg-blue" id="backup-ready">در حال بررسی...</span></div>
+  </div>
+  <div class="g2">
+    <div class="srv-panel">
+      <div class="srv-hero">
+        <div class="srv-hero-icon"><i class="ti ti-brand-telegram"></i></div>
+        <div class="srv-hero-text"><div class="srv-hero-domain">بکاپ امن در تلگرام</div><div class="srv-hero-sub">آخرین بکاپ پین می‌شود تا پنل جدید بتواند خودکار آن را پیدا کند</div></div>
+      </div>
+      <div style="padding:20px 22px 22px">
+        <div class="sr"><span class="sr-k"><i class="ti ti-link"></i> کانفیگ‌ها</span><span class="sr-v" id="backup-links">—</span></div>
+        <div class="sr"><span class="sr-k"><i class="ti ti-folders"></i> گروه‌های ساب</span><span class="sr-v" id="backup-subs">—</span></div>
+        <div class="sr"><span class="sr-k"><i class="ti ti-clock"></i> فاصله بکاپ خودکار</span><span class="sr-v" id="backup-interval">—</span></div>
+        <div class="sr"><span class="sr-k"><i class="ti ti-activity"></i> آخرین نتیجه</span><span class="sr-v" id="backup-last">—</span></div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:18px">
+          <button class="btn btn-p" id="backup-tg-btn" onclick="sendTelegramBackup()"><i class="ti ti-brand-telegram"></i> ارسال بکاپ الان</button>
+          <button class="btn btn-o" onclick="location.href='/api/backup/download'"><i class="ti ti-download"></i> دانلود فایل</button>
+        </div>
+      </div>
+    </div>
+    <div class="pw-panel">
+      <div class="pw-hero">
+        <div class="pw-hero-icon"><i class="ti ti-restore"></i></div>
+        <div class="pw-hero-text"><div class="pw-hero-title">بازیابی روی پنل جدید</div><div class="pw-hero-sub">UUID کانفیگ‌ها و کلید گروه‌ها بدون تغییر بازیابی می‌شوند</div></div>
+      </div>
+      <div class="pw-body">
+        <div class="cl amber" style="margin-top:0;margin-bottom:15px"><i class="ti ti-alert-triangle"></i><span>بازیابی، اطلاعات فعلی پنل را جایگزین می‌کند. قبل از ادامه از وضعیت فعلی بکاپ بگیرید.</span></div>
+        <button class="pw-submit" onclick="restoreTelegramBackup()"><i class="ti ti-brand-telegram"></i> بازیابی آخرین بکاپ تلگرام</button>
+        <div style="display:flex;align-items:center;gap:10px;margin:16px 0;color:var(--t3);font-size:10px"><span style="height:1px;background:var(--card-b);flex:1"></span> یا فایل JSON <span style="height:1px;background:var(--card-b);flex:1"></span></div>
+        <input type="file" id="backup-file" accept="application/json,.json" class="cp-input-full" style="margin-bottom:10px">
+        <button class="btn btn-o" style="width:100%;justify-content:center" onclick="restoreBackupFile()"><i class="ti ti-upload"></i> بازیابی فایل انتخاب‌شده</button>
+      </div>
+    </div>
+  </div>
+  <div class="card">
+    <div class="card-title"><i class="ti ti-world"></i> شرط حفظ لینک مشتری‌ها بدون تغییر</div>
+    <div class="cl" style="margin-top:0"><i class="ti ti-info-circle"></i><span>شناسه و مسیر لینک‌ها با بازیابی ثابت می‌ماند؛ اما نام دامنه بخشی از لینک مشتری است. برای اینکه مشتری هیچ لینک جدیدی نگیرد، یک دامنه اختصاصی ثابت را در <code>PUBLIC_BASE_URL</code> تنظیم و پس از جابه‌جایی DNS آن را به پنل جدید وصل کنید. دامنه موقت Railway قابل انتقال خودکار نیست.</span></div>
+    <div class="sr" style="margin-top:8px"><span class="sr-k"><i class="ti ti-world"></i> دامنه ثابت فعلی</span><span class="sr-v" id="backup-domain">تنظیم نشده</span></div>
+  </div>
+</section>
 <section class="pg" id="pg-settings">
   <div class="topbar"><div><div class="tb-title"><i class="ti ti-settings"></i> تنظیمات</div></div></div>
   <div class="g2">
@@ -1384,7 +1427,7 @@ overlay.addEventListener('click',closeSb);
 function navTo(name){
   document.querySelectorAll('.nav-it').forEach(n=>n.classList.toggle('on',n.dataset.pg===name));
   document.querySelectorAll('.pg').forEach(p=>p.classList.toggle('on',p.id==='pg-'+name));
-  const loaders={links:loadLinks,connections:loadConns,errors:loadErrs,subscriptions:loadSubsPage,subgroups:loadSubs,logs:loadActivity};
+  const loaders={links:loadLinks,connections:loadConns,errors:loadErrs,subscriptions:loadSubsPage,subgroups:loadSubs,logs:loadActivity,backup:loadBackupStatus};
   if(loaders[name])loaders[name]();
   closeSb();window.scrollTo({top:0,behavior:'smooth'});
 }
@@ -1423,6 +1466,51 @@ function renderErrs(errs){
   const el=document.getElementById('errs-full');if(!el)return;
   if(!errs.length){el.innerHTML='<div style="color:var(--green-t);padding:10px;font-size:12px;display:flex;align-items:center;gap:5px"><i class="ti ti-circle-check"></i> هیچ خطایی نیست</div>';return}
   el.innerHTML=errs.slice().reverse().map(e=>`<div class="erow"><div class="etime"><i class="ti ti-clock"></i>${new Date(e.time).toLocaleString('fa-IR')}</div><div class="emsg">${esc(e.error)}${e.url?' — '+esc(e.url):''}</div></div>`).join('');
+}
+async function loadBackupStatus(){
+  try{
+    const r=await authF('/api/backup/status'),d=await r.json();
+    const ready=document.getElementById('backup-ready');
+    ready.textContent=d.telegram_ready?'تلگرام آماده است':'نیاز به تنظیم تلگرام';
+    ready.className='badge '+(d.telegram_ready?'bg-green':'bg-amber');
+    document.getElementById('backup-links').textContent=toFa(d.links)+' مورد';
+    document.getElementById('backup-subs').textContent=toFa(d.subs)+' گروه';
+    document.getElementById('backup-interval').textContent=toFa(d.interval_hours)+' ساعت';
+    const last=d.last_result||{};
+    document.getElementById('backup-last').textContent=last.at?(last.message+' · '+new Date(last.at).toLocaleString('fa-IR')):last.message||'—';
+    document.getElementById('backup-domain').textContent=d.public_base_url||'تنظیم نشده — لینک قدیمی با تغییر دامنه حفظ نمی‌شود';
+    document.getElementById('backup-tg-btn').disabled=!d.telegram_ready;
+  }catch(e){console.error(e)}
+}
+async function sendTelegramBackup(){
+  const btn=document.getElementById('backup-tg-btn'),old=btn.innerHTML;
+  btn.disabled=true;btn.innerHTML='<i class="ti ti-loader-2" style="animation:spin 1s linear infinite"></i> در حال ارسال...';
+  try{
+    const r=await authF('/api/backup/telegram',{method:'POST'}),d=await r.json().catch(()=>({}));
+    if(!r.ok)throw new Error(d.detail||'ارسال ناموفق بود');
+    toast('بکاپ کامل به تلگرام ارسال شد ✓','ok');await loadBackupStatus();
+  }catch(e){toast(e.message,'err')}
+  finally{btn.disabled=false;btn.innerHTML=old}
+}
+async function restoreTelegramBackup(){
+  if(!confirm('تمام اطلاعات فعلی با آخرین بکاپ تلگرام جایگزین شود؟'))return;
+  try{
+    const r=await authF('/api/backup/restore-telegram',{method:'POST'}),d=await r.json().catch(()=>({}));
+    if(!r.ok)throw new Error(d.detail||'بازیابی ناموفق بود');
+    toast(`بازیابی شد: ${toFa(d.links)} کانفیگ و ${toFa(d.subs)} گروه`,'ok');
+    await Promise.all([loadBackupStatus(),loadLinks(),loadSubs()]);
+  }catch(e){toast(e.message,'err')}
+}
+async function restoreBackupFile(){
+  const file=document.getElementById('backup-file').files[0];
+  if(!file){toast('یک فایل JSON انتخاب کنید','err');return}
+  if(!confirm('تمام اطلاعات فعلی با این فایل جایگزین شود؟'))return;
+  try{
+    const r=await authF('/api/backup/restore',{method:'POST',headers:{'Content-Type':'application/json'},body:await file.text()}),d=await r.json().catch(()=>({}));
+    if(!r.ok)throw new Error(d.detail||'فایل معتبر نیست');
+    toast(`بازیابی شد: ${toFa(d.links)} کانفیگ و ${toFa(d.subs)} گروه`,'ok');
+    await Promise.all([loadBackupStatus(),loadLinks(),loadSubs()]);
+  }catch(e){toast(e.message,'err')}
 }
 async function loadActivity(){
   try{

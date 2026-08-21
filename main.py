@@ -6,8 +6,9 @@ import secrets
 import time
 import aiofiles
 from datetime import datetime, timedelta
+from copy import deepcopy
 from zoneinfo import ZoneInfo
-from urllib.parse import quote
+from urllib.parse import quote, urlparse
 from collections import deque, defaultdict
 from pathlib import Path
 
@@ -30,6 +31,32 @@ DATA_DIR = Path(os.environ.get("DATA_DIR", "/data"))
 DATA_FILE = DATA_DIR / "x4g_state.json"
 SECRET_FILE = DATA_DIR / "x4g_secret.key"
 SAVE_LOCK = asyncio.Lock()
+BACKUP_FORMAT = "x4g-telegram-backup"
+BACKUP_VERSION = 1
+BACKUP_MARKER = "#X4G_BACKUP_V1"
+_backup_task: asyncio.Task | None = None
+_backup_dirty = False
+_backup_last_result: dict = {"ok": None, "message": "هنوز بکاپی اجرا نشده", "at": None}
+
+def _env_bool(name: str, default: bool = False) -> bool:
+    value = os.environ.get(name)
+    if value is None:
+        return default
+    return value.strip().lower() in {"1", "true", "yes", "on"}
+
+def _telegram_backup_chat_id() -> str | None:
+    """چت مقصد بکاپ؛ در صورت نبود متغیر اختصاصی، اولین ادمین ربات استفاده می‌شود."""
+    explicit = os.environ.get("TELEGRAM_BACKUP_CHAT_ID", "").strip()
+    if explicit:
+        return explicit
+    admins = os.environ.get("TELEGRAM_ADMIN_IDS", "").replace(" ", "").split(",")
+    return next((item for item in admins if item.lstrip("-").isdigit()), None)
+
+def _backup_interval_hours() -> float:
+    try:
+        return max(0.25, float(os.environ.get("TELEGRAM_BACKUP_INTERVAL_HOURS", "6") or 6))
+    except (TypeError, ValueError):
+        return 6.0
 
 def _load_or_create_secret() -> str:
     """SECRET_KEY را روی دیسک ذخیره و ثابت نگه می‌دارد.
@@ -39,14 +66,17 @@ def _load_or_create_secret() -> str:
     باعث می‌شد پسورد درست هم دیگر قبول نشود. حالا secret یک‌بار ساخته و در
     فایل ذخیره می‌شود و در ری‌استارت‌های بعدی همان مقدار خوانده می‌شود."""
     env_secret = os.environ.get("SECRET_KEY")
-    if env_secret:
-        return env_secret
     try:
         DATA_DIR.mkdir(parents=True, exist_ok=True)
+        # فایل موجود (خصوصاً secret بازیابی‌شده از بکاپ) باید بر env اولویت داشته باشد؛
+        # وگرنه رمز پنل و گروه‌ها در اولین ری‌استارت بعد از مهاجرت نامعتبر می‌شوند.
         if SECRET_FILE.exists():
             existing = SECRET_FILE.read_text(encoding="utf-8").strip()
             if existing:
                 return existing
+        if env_secret:
+            SECRET_FILE.write_text(env_secret, encoding="utf-8")
+            return env_secret
         new_secret = secrets.token_urlsafe(32)
         SECRET_FILE.write_text(new_secret, encoding="utf-8")
         return new_secret
@@ -85,6 +115,7 @@ async def load_state():
         logger.warning(f"Could not load state: {e}")
 
 async def save_state():
+    global _backup_dirty
     async with SAVE_LOCK:
         try:
             DATA_DIR.mkdir(parents=True, exist_ok=True)
@@ -98,8 +129,186 @@ async def save_state():
             async with aiofiles.open(tmp, "w", encoding="utf-8") as f:
                 await f.write(json.dumps(data, ensure_ascii=False, indent=2))
             tmp.replace(DATA_FILE)
+            _backup_dirty = True
         except Exception as e:
             logger.warning(f"Could not save state: {e}")
+
+async def build_backup_payload() -> dict:
+    """یک اسنپ‌شات کامل و قابل‌انتقال می‌سازد؛ شناسه‌ها دست‌نخورده می‌مانند."""
+    async with LINKS_LOCK:
+        links = deepcopy(LINKS)
+    async with SUBS_LOCK:
+        subs = deepcopy(SUBS)
+    return {
+        "format": BACKUP_FORMAT,
+        "version": BACKUP_VERSION,
+        "created_at": datetime.now().isoformat(),
+        "source_host": CONFIG.get("host"),
+        "state": {
+            "links": links,
+            "subs": subs,
+            "password_hash": AUTH["password_hash"],
+        },
+        # برای معتبر ماندن رمز پنل و رمز گروه‌ها بعد از مهاجرت لازم است.
+        "security": {"secret": CONFIG["secret"]},
+    }
+
+def _normalise_backup_payload(payload: dict) -> tuple[dict, str | None]:
+    if not isinstance(payload, dict):
+        raise ValueError("فایل بکاپ معتبر نیست")
+    if payload.get("format") == BACKUP_FORMAT:
+        state = payload.get("state")
+        secret = (payload.get("security") or {}).get("secret")
+    elif "links" in payload and "subs" in payload:  # سازگاری با x4g_state.json قدیمی
+        state = payload
+        secret = None
+    else:
+        raise ValueError("فرمت فایل بکاپ شناخته نشد")
+    if not isinstance(state, dict) or not isinstance(state.get("links"), dict) or not isinstance(state.get("subs"), dict):
+        raise ValueError("ساختار links/subs در بکاپ خراب است")
+    if len(state["links"]) > 100000 or len(state["subs"]) > 100000:
+        raise ValueError("تعداد رکوردهای بکاپ غیرعادی است")
+    return state, secret if isinstance(secret, str) and secret else None
+
+async def restore_backup_payload(payload: dict, source: str = "manual") -> dict:
+    """Restore اتمیک اطلاعات؛ UUID و uuid_key گروه‌ها را عیناً حفظ می‌کند."""
+    state, restored_secret = _normalise_backup_payload(payload)
+    links = deepcopy(state["links"])
+    subs = deepcopy(state["subs"])
+
+    # فقط ارجاع‌های واقعاً موجود نگه داشته می‌شوند؛ خود شناسه‌ها هرگز بازتولید نمی‌شوند.
+    valid_link_ids = set(links)
+    for sub in subs.values():
+        if not isinstance(sub, dict):
+            raise ValueError("اطلاعات یکی از گروه‌ها خراب است")
+        ids = sub.get("link_ids", [])
+        sub["link_ids"] = [lid for lid in ids if lid in valid_link_ids] if isinstance(ids, list) else []
+    for uid, link in links.items():
+        if not isinstance(link, dict):
+            raise ValueError(f"اطلاعات کانفیگ {uid} خراب است")
+        sid = link.get("sub_id")
+        if sid not in subs:
+            link["sub_id"] = None
+
+    async with LINKS_LOCK:
+        LINKS.clear()
+        LINKS.update(links)
+    async with SUBS_LOCK:
+        SUBS.clear()
+        SUBS.update(subs)
+
+    if restored_secret:
+        CONFIG["secret"] = restored_secret
+        try:
+            DATA_DIR.mkdir(parents=True, exist_ok=True)
+            SECRET_FILE.write_text(restored_secret, encoding="utf-8")
+        except Exception as exc:
+            logger.warning(f"Could not persist restored secret: {exc}")
+    password_hash = state.get("password_hash")
+    if isinstance(password_hash, str) and password_hash:
+        AUTH["password_hash"] = password_hash
+    async with SESSIONS_LOCK:
+        SESSIONS.clear()
+    await save_state()
+    log_activity("backup", f"بکاپ از {source} بازیابی شد: {len(links)} کانفیگ و {len(subs)} گروه", "ok")
+    return {"ok": True, "links": len(links), "subs": len(subs)}
+
+async def send_backup_to_telegram(reason: str = "manual") -> dict:
+    global _backup_last_result
+    token = os.environ.get("TELEGRAM_BOT_TOKEN", "").strip()
+    chat_id = _telegram_backup_chat_id()
+    now = datetime.now().isoformat()
+    if not token or not chat_id:
+        result = {"ok": False, "message": "توکن ربات یا شناسه چت بکاپ تنظیم نشده", "at": now}
+        _backup_last_result = result
+        return result
+    try:
+        payload = await build_backup_payload()
+        raw = json.dumps(payload, ensure_ascii=False, indent=2).encode("utf-8")
+        filename = f"x4g-backup-{datetime.now().strftime('%Y%m%d-%H%M%S')}.json"
+        caption = f"{BACKUP_MARKER}\nبکاپ کامل X4G · {len(payload['state']['links'])} کانفیگ · {len(payload['state']['subs'])} گروه\nعلت: {reason}"
+        async with httpx.AsyncClient(timeout=httpx.Timeout(60.0, connect=15.0)) as client:
+            response = await client.post(
+                f"https://api.telegram.org/bot{token}/sendDocument",
+                data={"chat_id": chat_id, "caption": caption, "disable_notification": "true"},
+                files={"document": (filename, raw, "application/json")},
+            )
+            data = response.json()
+            if not data.get("ok"):
+                raise RuntimeError(data.get("description") or "Telegram sendDocument failed")
+            message_id = data["result"]["message_id"]
+            # پیام پین‌شده نقش اشاره‌گر آخرین بکاپ را دارد تا پنل تازه بدون تاریخچه چت آن را پیدا کند.
+            pin = await client.post(
+                f"https://api.telegram.org/bot{token}/pinChatMessage",
+                json={"chat_id": chat_id, "message_id": message_id, "disable_notification": True},
+            )
+            pin_data = pin.json()
+            pinned_ok = bool(pin_data.get("ok"))
+            if not pinned_ok:
+                logger.warning(f"Backup sent but could not pin it: {pin_data.get('description')}")
+        message = ("بکاپ کامل به تلگرام ارسال و به‌عنوان آخرین نسخه ثبت شد" if pinned_ok else
+                   "بکاپ ارسال شد، اما پین نشد؛ برای بازیابی خودکار دسترسی Pin ربات را فعال کنید")
+        result = {"ok": True, "message": message, "at": now, "filename": filename, "pinned": pinned_ok}
+        _backup_last_result = result
+        log_activity("backup", "بکاپ کامل به تلگرام ارسال شد", "ok")
+        return result
+    except Exception as exc:
+        logger.warning(f"Telegram backup failed: {exc}")
+        result = {"ok": False, "message": str(exc), "at": now}
+        _backup_last_result = result
+        return result
+
+async def fetch_latest_telegram_backup() -> dict:
+    token = os.environ.get("TELEGRAM_BOT_TOKEN", "").strip()
+    chat_id = _telegram_backup_chat_id()
+    if not token or not chat_id:
+        raise ValueError("توکن ربات یا شناسه چت بکاپ تنظیم نشده")
+    async with httpx.AsyncClient(timeout=httpx.Timeout(60.0, connect=15.0)) as client:
+        chat_res = await client.post(f"https://api.telegram.org/bot{token}/getChat", json={"chat_id": chat_id})
+        chat_data = chat_res.json()
+        if not chat_data.get("ok"):
+            raise RuntimeError(chat_data.get("description") or "دریافت چت تلگرام ناموفق بود")
+        pinned = chat_data["result"].get("pinned_message") or {}
+        document = pinned.get("document")
+        if not document or BACKUP_MARKER not in (pinned.get("caption") or ""):
+            raise ValueError("آخرین بکاپ پین‌شده X4G در چت پیدا نشد")
+        file_res = await client.post(f"https://api.telegram.org/bot{token}/getFile", json={"file_id": document["file_id"]})
+        file_data = file_res.json()
+        if not file_data.get("ok"):
+            raise RuntimeError(file_data.get("description") or "دریافت فایل تلگرام ناموفق بود")
+        download = await client.get(f"https://api.telegram.org/file/bot{token}/{file_data['result']['file_path']}")
+        download.raise_for_status()
+        if len(download.content) > 20 * 1024 * 1024:
+            raise ValueError("حجم بکاپ بیشتر از حد مجاز است")
+        return json.loads(download.content.decode("utf-8"))
+
+async def restore_latest_telegram_backup(source: str = "telegram") -> dict:
+    payload = await fetch_latest_telegram_backup()
+    return await restore_backup_payload(payload, source=source)
+
+async def _backup_loop():
+    global _backup_dirty
+    interval_seconds = _backup_interval_hours() * 3600
+    last_sent = time.time()
+    # تغییرات حداکثر ظرف ۵ دقیقه بکاپ می‌شوند؛ interval نیز بکاپ دوره‌ای اجباری است.
+    check_every = min(300.0, interval_seconds)
+    while True:
+        try:
+            await asyncio.sleep(check_every)
+            due = time.time() - last_sent >= interval_seconds
+            if not _backup_dirty and not due:
+                continue
+            had_dirty = _backup_dirty
+            _backup_dirty = False
+            result = await send_backup_to_telegram(reason="تغییر اطلاعات" if had_dirty else "زمان‌بندی خودکار")
+            if result.get("ok"):
+                last_sent = time.time()
+            else:
+                _backup_dirty = _backup_dirty or had_dirty
+        except asyncio.CancelledError:
+            break
+        except Exception as exc:
+            logger.warning(f"Scheduled backup error: {exc}")
 
 # ── In-memory state ───────────────────────────────────────────────────────────
 connections: dict = {}
@@ -192,13 +401,23 @@ async def require_auth(request: Request):
 # ── Startup / Shutdown ────────────────────────────────────────────────────────
 @app.on_event("startup")
 async def startup():
-    global http_client
+    global http_client, _backup_task
     limits = httpx.Limits(max_connections=500, max_keepalive_connections=100)
     timeout = httpx.Timeout(30.0, connect=10.0)
     http_client = httpx.AsyncClient(
         limits=limits, timeout=timeout, follow_redirects=True,
     )
+    # در نصب تازه، آخرین فایل پین‌شده تلگرام قبل از ساخت لینک پیش‌فرض بازیابی می‌شود.
+    state_missing = not DATA_FILE.exists() or DATA_FILE.stat().st_size == 0
+    if state_missing and _env_bool("TELEGRAM_BACKUP_AUTO_RESTORE", True) and _telegram_backup_chat_id():
+        try:
+            restored = await restore_latest_telegram_backup(source="تلگرام (بازیابی خودکار)")
+            logger.info(f"Automatic Telegram restore completed: {restored}")
+        except Exception as exc:
+            logger.warning(f"Automatic Telegram restore skipped/failed: {exc}")
     await load_state()
+    if os.environ.get("TELEGRAM_BOT_TOKEN") and _telegram_backup_chat_id():
+        _backup_task = asyncio.create_task(_backup_loop())
     await _tg_start_bot()
     log_activity("system", "سرور راه‌اندازی شد", "ok")
     logger.info(f"X4G v9.5 started on port {CONFIG['port']}")
@@ -206,16 +425,21 @@ async def startup():
 @app.on_event("shutdown")
 async def shutdown():
     await save_state()
+    if _backup_task:
+        _backup_task.cancel()
     await _tg_stop_bot()
     if http_client:
         await http_client.aclose()
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 def get_host(request: Request | None = None) -> str:
-    """آدرس دامنه رو ترجیحاً از خودِ درخواست HTTP می‌گیره (هدر Host/X-Forwarded-Host)
-    چون این همیشه دقیقاً همون دامنه‌ایه که کاربر واقعاً بهش وصل شده. متغیر محیطی
-    RAILWAY_PUBLIC_DOMAIN فقط به‌عنوان fallback استفاده می‌شه، چون گاهی موقع بالا اومدن
-    کانتینر هنوز مقداردهی نشده و باعث می‌شد لینک‌ها گاهی با "localhost" ساخته بشن."""
+    """دامنه عمومی لینک‌ها؛ دامنه ثابت سفارشی بر دامنه موقت دیپلوی اولویت دارد."""
+    public_base = os.environ.get("PUBLIC_BASE_URL", "").strip()
+    if public_base:
+        parsed = urlparse(public_base if "://" in public_base else f"https://{public_base}")
+        if parsed.hostname:
+            CONFIG["host"] = parsed.hostname
+            return parsed.hostname
     if request is not None:
         h = request.headers.get("x-forwarded-host") or request.headers.get("host")
         if h:
@@ -654,6 +878,64 @@ async def get_stats(_=Depends(require_auth)):
 @app.get("/api/activity")
 async def get_activity(_=Depends(require_auth)):
     return {"logs": list(activity_logs)[-150:]}
+
+# ── Backup / disaster recovery ────────────────────────────────────────────────
+@app.get("/api/backup/status")
+async def backup_status(_=Depends(require_auth)):
+    token_ready = bool(os.environ.get("TELEGRAM_BOT_TOKEN", "").strip())
+    chat_id = _telegram_backup_chat_id()
+    return {
+        "telegram_ready": token_ready and bool(chat_id),
+        "chat_id": chat_id,
+        "auto_restore": _env_bool("TELEGRAM_BACKUP_AUTO_RESTORE", True),
+        "interval_hours": _backup_interval_hours(),
+        "public_base_url": os.environ.get("PUBLIC_BASE_URL", ""),
+        "last_result": _backup_last_result,
+        "links": len(LINKS),
+        "subs": len(SUBS),
+    }
+
+@app.get("/api/backup/download")
+async def download_backup(_=Depends(require_auth)):
+    payload = await build_backup_payload()
+    raw = json.dumps(payload, ensure_ascii=False, indent=2).encode("utf-8")
+    filename = f"x4g-backup-{datetime.now().strftime('%Y%m%d-%H%M%S')}.json"
+    return Response(
+        content=raw,
+        media_type="application/json",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+@app.post("/api/backup/telegram")
+async def backup_to_telegram(_=Depends(require_auth)):
+    result = await send_backup_to_telegram(reason="درخواست دستی از پنل")
+    if not result.get("ok"):
+        raise HTTPException(status_code=502, detail=result.get("message"))
+    return result
+
+@app.post("/api/backup/restore-telegram")
+async def restore_from_telegram(token=Depends(require_auth)):
+    try:
+        result = await restore_latest_telegram_backup(source="آخرین بکاپ تلگرام")
+        async with SESSIONS_LOCK:
+            SESSIONS[token] = time.time() + SESSION_TTL
+        return result
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+@app.post("/api/backup/restore")
+async def restore_uploaded_backup(request: Request, token=Depends(require_auth)):
+    raw = await request.body()
+    if len(raw) > 20 * 1024 * 1024:
+        raise HTTPException(status_code=413, detail="حجم فایل بیشتر از ۲۰ مگابایت است")
+    try:
+        payload = json.loads(raw.decode("utf-8"))
+        result = await restore_backup_payload(payload, source="فایل آپلودشده")
+        async with SESSIONS_LOCK:
+            SESSIONS[token] = time.time() + SESSION_TTL
+        return result
+    except (ValueError, UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
 
 # ── Live connections (with IP) ────────────────────────────────────────────────
 @app.get("/api/connections")
