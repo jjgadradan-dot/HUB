@@ -1287,13 +1287,14 @@ a{color:inherit;text-decoration:none}
   </div>
   <div class="card">
     <div class="card-title"><i class="ti ti-world"></i> شرط حفظ لینک مشتری‌ها بدون تغییر</div>
-    <div class="cl" style="margin-top:0"><i class="ti ti-info-circle"></i><span>با ثبت دامنه، همان دامنه و مسیرهای ساب داخل بکاپ حفظ می‌شوند. بعد از انتقال پنل کافی است DNS یا Custom Domain همین دامنه را به سرویس جدید وصل کنید؛ اپ مشتری همان لینک قبلی را فقط Update می‌کند.</span></div>
+    <div class="cl" style="margin-top:0"><i class="ti ti-info-circle"></i><span>لینک ساب روی دامنه ثابت ثبت‌شده می‌ماند، اما دامنه داخل کانفیگ‌های خروجی خودکار از Railway فعلی گرفته می‌شود. بعد از انتقال، مشتری همان ساب قبلی را Update می‌کند و دامنه کانفیگ بدون ارسال لینک جدید به Railway پنل تازه تغییر می‌کند.</span></div>
     <div class="form-row" style="margin-top:16px">
       <div class="fg" style="flex:1;min-width:240px"><label>دامنه ثابت ساب مشتری‌ها</label><input class="fi" id="stable-domain-input" dir="ltr" placeholder="https://sub.example.com" style="width:100%"></div>
       <button class="btn btn-p" onclick="saveStableDomain()"><i class="ti ti-device-floppy"></i> ذخیره دامنه</button>
       <button class="btn btn-g" onclick="registerCurrentDomain()"><i class="ti ti-current-location"></i> ثبت دامنه فعلی</button>
     </div>
-    <div class="sr" style="margin-top:10px"><span class="sr-k"><i class="ti ti-world"></i> دامنه ثبت‌شده</span><span class="sr-v" id="backup-domain">تنظیم نشده</span></div>
+    <div class="sr" style="margin-top:10px"><span class="sr-k"><i class="ti ti-rss"></i> دامنه ثابت لینک ساب</span><span class="sr-v" id="backup-domain">تنظیم نشده</span></div>
+    <div class="sr"><span class="sr-k"><i class="ti ti-server"></i> دامنه اتصال داخل کانفیگ‌ها</span><span class="sr-v" id="config-domain">دامنه Railway</span></div>
     <div class="cl amber" id="railway-domain-warning" style="display:none"><i class="ti ti-alert-triangle"></i><span>این دامنه موقت Railway است. ثبت آن مسیرها را ثابت نگه می‌دارد، اما برای انتقال بدون قطعی باید Custom Domain را به سرویس جدید منتقل کنید؛ دامنه موقت Railway قابل انتقال تضمینی نیست.</span></div>
   </div>
 </section>
@@ -1525,6 +1526,7 @@ async function loadBackupStatus(){
     const last=d.last_result||{};
     document.getElementById('backup-last').textContent=last.at?(last.message+' · '+new Date(last.at).toLocaleString('fa-IR')):last.message||'—';
     document.getElementById('backup-domain').textContent=domain.public_base_url||'تنظیم نشده — لینک قدیمی با تغییر دامنه حفظ نمی‌شود';
+    document.getElementById('config-domain').textContent=domain.config_host||'دامنه Railway قابل تشخیص نیست';
     document.getElementById('stable-domain-input').value=domain.public_base_url||domain.current_url||'';
     document.getElementById('railway-domain-warning').style.display=domain.is_temporary_railway?'flex':'none';
     document.getElementById('backup-tg-btn').disabled=!d.telegram_ready;

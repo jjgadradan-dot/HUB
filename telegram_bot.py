@@ -19,6 +19,7 @@ from main import (
     set_link_active,
     vless_link_for_link,
     get_host,
+    get_subscription_base,
     fmt_bytes,
     is_link_allowed,
     logger,
@@ -303,8 +304,7 @@ def _format_detail(uid: str, l: dict) -> str:
 
 # ── Sub-group (لینک ساب حرفه‌ای) view builders ────────────────────────────────
 def _group_public_url(s: dict) -> str:
-    host = get_host()
-    return f"https://{host}/p/{s.get('uuid_key','')}"
+    return f"{get_subscription_base()}/p/{s.get('uuid_key','')}"
 
 def _subs_list_kb(page: int):
     items = sorted(SUBS.items(), key=lambda kv: kv[1].get("created_at", ""), reverse=True)
@@ -774,7 +774,7 @@ async def _handle_callback(cb: dict):
             return
         host = get_host()
         vless = vless_link_for_link(l, uid, host)
-        sub_url = f"https://{host}/sub/{uid}"
+        sub_url = f"{get_subscription_base()}/sub/{uid}"
         msg = f"🔗 لینک اتصال «{l.get('label')}»:\n\n<code>{vless}</code>\n\nلینک ساب ساده (فقط متن کانفیگ):\n<code>{sub_url}</code>"
         sid = l.get("sub_id")
         if sid and sid in SUBS:

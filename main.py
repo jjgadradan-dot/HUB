@@ -528,21 +528,46 @@ async def shutdown():
         await http_client.aclose()
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
+def _host_from_value(value: str) -> str:
+    value = (value or "").strip()
+    if not value:
+        return ""
+    parsed = urlparse(value if "://" in value else f"https://{value}")
+    return parsed.hostname or ""
+
 def get_host(request: Request | None = None) -> str:
-    """دامنه عمومی لینک‌ها؛ دامنه ثابت سفارشی بر دامنه موقت دیپلوی اولویت دارد."""
-    public_base = os.environ.get("PUBLIC_BASE_URL", "").strip()
-    if public_base:
-        parsed = urlparse(public_base if "://" in public_base else f"https://{public_base}")
-        if parsed.hostname:
-            CONFIG["host"] = parsed.hostname
-            return parsed.hostname
+    """دامنه اتصال خود کانفیگ؛ عمداً از دامنه ثابت ساب جدا است.
+
+    ساب می‌تواند روی دامنه اختصاصی ماندگار باشد، ولی VLESS/XHTTP مستقیماً از
+    دامنه فعلی Railway استفاده کند تا با تعویض پنل، محتوای ساب خودکار مقصد جدید بدهد.
+    """
+    configured = os.environ.get("CONFIG_PUBLIC_HOST", "").strip()
+    railway = os.environ.get("RAILWAY_PUBLIC_DOMAIN", "").strip()
+    for candidate in (configured, railway):
+        host = _host_from_value(candidate)
+        if host and host != "localhost":
+            CONFIG["host"] = host
+            return host
     if request is not None:
         h = request.headers.get("x-forwarded-host") or request.headers.get("host")
         if h:
-            h = h.split(":")[0]
-            CONFIG["host"] = h  # کش آخرین دامنه‌ی واقعی دیده‌شده، برای جاهایی که request نداریم (مثل ربات تلگرام)
-            return h
-    return os.environ.get("RAILWAY_PUBLIC_DOMAIN", CONFIG["host"])
+            host = _host_from_value(h.split(",")[0].strip())
+            if host:
+                CONFIG["host"] = host
+                return host
+    return CONFIG["host"]
+
+def get_subscription_base(request: Request | None = None) -> str:
+    """آدرس ثابت انتشار لینک‌های ساب و صفحه گروه، مستقل از مقصد کانفیگ."""
+    public_base = os.environ.get("PUBLIC_BASE_URL", "").strip()
+    if public_base:
+        return _normalise_public_base_url(public_base)
+    if request is not None:
+        host = (request.headers.get("x-forwarded-host") or request.headers.get("host") or "").split(",")[0].strip()
+        proto = (request.headers.get("x-forwarded-proto") or request.url.scheme or "https").split(",")[0].strip()
+        if host:
+            return _normalise_public_base_url(f"{proto}://{host}")
+    return f"https://{get_host()}"
 
 def generate_uuid() -> str:
     h = secrets.token_hex(16)
@@ -793,17 +818,17 @@ async def create_sub(request: Request, _=Depends(require_auth)):
         }
     asyncio.create_task(save_state())
     log_activity("sub", f"گروه «{name}» ساخته شد", "ok")
-    host = get_host(request)
+    sub_base = get_subscription_base(request)
     return {
         "sub_id": sub_id,
         **SUBS[sub_id],
-        "public_url": f"https://{host}/p/{uuid_key}",
-        "sub_url": f"https://{host}/sub-group/{uuid_key}",
+        "public_url": f"{sub_base}/p/{uuid_key}",
+        "sub_url": f"{sub_base}/sub-group/{uuid_key}",
     }
 
 @app.get("/api/subs")
 async def list_subs(request: Request, _=Depends(require_auth)):
-    host = get_host(request)
+    sub_base = get_subscription_base(request)
     async with SUBS_LOCK:
         snap_subs = dict(SUBS)
     async with LINKS_LOCK:
@@ -822,8 +847,8 @@ async def list_subs(request: Request, _=Depends(require_auth)):
             "active_count": active_count,
             "total_used_bytes": total_used,
             "total_used_fmt": fmt_bytes(total_used),
-            "public_url": f"https://{host}/p/{s['uuid_key']}",
-            "sub_url": f"https://{host}/sub-group/{s['uuid_key']}",
+            "public_url": f"{sub_base}/p/{s['uuid_key']}",
+            "sub_url": f"{sub_base}/sub-group/{s['uuid_key']}",
         })
     result.sort(key=lambda x: x["created_at"], reverse=True)
     return {"subs": result}
@@ -1010,6 +1035,7 @@ async def get_domain_settings(request: Request, _=Depends(require_auth)):
         "registered": bool(registered),
         "public_base_url": registered,
         "current_url": current_url,
+        "config_host": get_host(request),
         "is_temporary_railway": "railway.app" in (urlparse(registered or current_url).hostname or ""),
     }
 
@@ -1399,17 +1425,19 @@ async def create_link(request: Request, _=Depends(require_auth)):
     )
 
     host = get_host(request)
+    sub_base = get_subscription_base(request)
     return {
         "uuid": uid,
         **link,
         "expired": False,
         "vless_link": vless_link_for_link(link, uid, host),
-        "sub_url": f"https://{host}/sub/{uid}",
+        "sub_url": f"{sub_base}/sub/{uid}",
     }
 
 @app.get("/api/links")
 async def list_links(request: Request, _=Depends(require_auth)):
     host = get_host(request)
+    sub_base = get_subscription_base(request)
     async with LINKS_LOCK:
         snap = dict(LINKS)
     result = []
@@ -1421,7 +1449,7 @@ async def list_links(request: Request, _=Depends(require_auth)):
             "protocol": proto,
             "expired": is_link_expired(d),
             "vless_link": vless_link_for_link(d, uid, host),
-            "sub_url": f"https://{host}/sub/{uid}",
+            "sub_url": f"{sub_base}/sub/{uid}",
             "connected_ips": len(unique_ips_for_uuid(uid)),
         })
     result.sort(key=lambda x: x["created_at"], reverse=True)
@@ -1576,6 +1604,7 @@ async def public_sub_data(uuid_key: str, request: Request):
             return JSONResponse({"locked": True, "name": sub["name"]})
 
     host = get_host(request)
+    sub_base = get_subscription_base(request)
     link_ids = sub.get("link_ids", [])
     async with LINKS_LOCK:
         snap = dict(LINKS)
@@ -1601,7 +1630,7 @@ async def public_sub_data(uuid_key: str, request: Request):
             "limit_fmt": "∞" if link.get("limit_bytes", 0) == 0 else fmt_bytes(link["limit_bytes"]),
             "expires_at": link.get("expires_at"),
             "vless_link": vless_link_for_link(link, lid, host),
-            "sub_url": f"https://{host}/sub/{lid}",
+            "sub_url": f"{sub_base}/sub/{lid}",
             "connections": conn_count,
             "ip_limit": link.get("ip_limit", 0),
             "speed_limit_bytes": link.get("speed_limit_bytes", 0),
@@ -1612,7 +1641,7 @@ async def public_sub_data(uuid_key: str, request: Request):
         "locked": False,
         "name": sub["name"],
         "desc": sub.get("desc", ""),
-        "sub_url": f"https://{host}/sub-group/{uuid_key}",
+        "sub_url": f"{sub_base}/sub-group/{uuid_key}",
         "active_connections": active_conns,
         "total_used_fmt": fmt_bytes(total_used),
         "links": links_out,
