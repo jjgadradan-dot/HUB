@@ -32,14 +32,14 @@ from speed_limit import throttle
 
 router = APIRouter()
 
-XHTTP_BUF = 512 * 1024
-DOWNLINK_QUEUE_MAX = 512
+XHTTP_BUF = 1024 * 1024
+DOWNLINK_QUEUE_MAX = 128  # سقف حافظه کنترل‌شده؛ هر سشن حداکثر حدود 128MB صف
 SESSION_IDLE_TIMEOUT = 30
 REAPER_INTERVAL = 10
 TCP_CONNECT_TIMEOUT = 10.0
 
 # ── تنظیمات موتور تطبیقی ──────────────────────────────────────────────────────
-SOCK_BUF_SIZE = 2 * 1024 * 1024     # SO_SNDBUF / SO_RCVBUF
+SOCK_BUF_SIZE = 4 * 1024 * 1024     # SO_SNDBUF / SO_RCVBUF
 
 # _AdaptiveFlow: بازه‌ی مجاز برای high-water تطبیقی (AIMD)
 FLOW_MIN_HW = 256 * 1024

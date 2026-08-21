@@ -19,6 +19,7 @@ from main import (
     set_link_active,
     vless_link_for_link,
     get_host,
+    get_subscription_base,
     fmt_bytes,
     is_link_allowed,
     logger,
@@ -213,14 +214,20 @@ def _wizard_skip_kb(step_key: str, label: str):
         [{"text": "❌ انصراف", "callback_data": "w:cancel"}],
     ]}
 
-ALPN_PRESET_MAP = {"p1": "http/1.1", "p2": "h2,http/1.1", "p3": "h2"}
+ALPN_PRESET_MAP = {
+    "p1": "http/1.1",
+    "p2": "h2,http/1.1",
+    "p3": "h2",
+    "p4": "h3,h2,http/1.1",
+}
 
 def _wizard_alpn_kb():
     return {"inline_keyboard": [
         [{"text": "🔤 http/1.1 (پیشنهادی)", "callback_data": "w:alpnpreset:p1"}],
         [{"text": "🔤 h2,http/1.1", "callback_data": "w:alpnpreset:p2"}],
         [{"text": "🔤 h2", "callback_data": "w:alpnpreset:p3"}],
-        [{"text": "⏭ پیش‌فرض پروتکل", "callback_data": "w:skip:alpn"}],
+        [{"text": "🆕 h3 + h2 + http/1.1 (همه باهم)", "callback_data": "w:alpnpreset:p4"}],
+        [{"text": "⏭ پیش‌فرض امن پروتکل", "callback_data": "w:skip:alpn"}],
         [{"text": "❌ انصراف", "callback_data": "w:cancel"}],
     ]}
 
@@ -303,8 +310,7 @@ def _format_detail(uid: str, l: dict) -> str:
 
 # ── Sub-group (لینک ساب حرفه‌ای) view builders ────────────────────────────────
 def _group_public_url(s: dict) -> str:
-    host = get_host()
-    return f"https://{host}/p/{s.get('uuid_key','')}"
+    return f"{get_subscription_base()}/p/{s.get('uuid_key','')}"
 
 def _subs_list_kb(page: int):
     items = sorted(SUBS.items(), key=lambda kv: kv[1].get("created_at", ""), reverse=True)
@@ -774,7 +780,7 @@ async def _handle_callback(cb: dict):
             return
         host = get_host()
         vless = vless_link_for_link(l, uid, host)
-        sub_url = f"https://{host}/sub/{uid}"
+        sub_url = f"{get_subscription_base()}/sub/{uid}"
         msg = f"🔗 لینک اتصال «{l.get('label')}»:\n\n<code>{vless}</code>\n\nلینک ساب ساده (فقط متن کانفیگ):\n<code>{sub_url}</code>"
         sid = l.get("sub_id")
         if sid and sid in SUBS:
@@ -841,10 +847,25 @@ async def start_bot():
     _poll_task = asyncio.create_task(_poll_loop())
 
 async def stop_bot():
-    global _running, _client
+    global _running, _client, _poll_task
     _running = False
     if _poll_task:
         _poll_task.cancel()
+        try:
+            await _poll_task
+        except (asyncio.CancelledError, Exception):
+            pass
+        _poll_task = None
     if _client:
         await _client.aclose()
         _client = None
+
+async def reconfigure_bot(token: str, admin_ids: str):
+    """تنظیم مجدد ربات بدون نیاز به ری‌استارت سرویس."""
+    global BOT_TOKEN, ADMIN_IDS, API_BASE
+    await stop_bot()
+    BOT_TOKEN = (token or "").strip()
+    raw = (admin_ids or "").replace(" ", "")
+    ADMIN_IDS = {int(x) for x in raw.split(",") if x.isdigit()} if raw else set()
+    API_BASE = f"https://api.telegram.org/bot{BOT_TOKEN}"
+    await start_bot()

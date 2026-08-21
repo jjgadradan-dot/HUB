@@ -32,16 +32,23 @@ class _Bucket:
             self.tokens = min(self.capacity, self.tokens + elapsed * self.rate)
 
     async def consume(self, n: int):
-        """تا وقتی n بایت توکن آماده نشه، به‌صورت غیرمسدودکننده (async sleep) صبر می‌کنه."""
-        while True:
-            self._refill()
-            if self.tokens >= n:
-                self.tokens -= n
-                return
-            deficit = n - self.tokens
-            wait = deficit / self.rate
-            # سقف sleep کوتاهه تا اگه نرخ کانفیگ از پنل تغییر کرد، زود متوجه بشیم
-            await asyncio.sleep(min(max(wait, 0.004), 0.5))
+        """مصرف توکن بدون قفل‌شدن روی چانک‌های بزرگ‌تر از ظرفیت bucket.
+
+        نسخه قبلی اگر اندازه یک چانک از ظرفیت یک‌ثانیه‌ای بیشتر بود، برای همیشه
+        منتظر توکنی می‌ماند که هیچ‌وقت نمی‌توانست از capacity بیشتر شود.
+        """
+        remaining = n
+        while remaining > 0:
+            wanted = min(remaining, self.capacity)
+            while True:
+                self._refill()
+                if self.tokens >= wanted:
+                    self.tokens -= wanted
+                    remaining -= wanted
+                    break
+                deficit = wanted - self.tokens
+                wait = deficit / self.rate
+                await asyncio.sleep(min(max(wait, 0.002), 0.25))
 
 
 def _get_bucket(uuid: str, rate: int) -> _Bucket:

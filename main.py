@@ -4,10 +4,13 @@ import os
 import hashlib
 import secrets
 import time
+import re
+import sys
 import aiofiles
 from datetime import datetime, timedelta
+from copy import deepcopy
 from zoneinfo import ZoneInfo
-from urllib.parse import quote
+from urllib.parse import quote, urlparse
 from collections import deque, defaultdict
 from pathlib import Path
 
@@ -25,11 +28,174 @@ IRAN_TZ = ZoneInfo("Asia/Tehran")
 
 app = FastAPI(title="X4G", docs_url=None, redoc_url=None)
 
+# وقتی فایل با `python main.py` اجرا می‌شود، ماژول‌های relay دوباره `main` را import
+# می‌کنند. این alias از اجرای دوباره فایل و circular import جلوگیری می‌کند.
+if __name__ == "__main__":
+    sys.modules.setdefault("main", sys.modules[__name__])
+
 # ── Persistence ───────────────────────────────────────────────────────────────
 DATA_DIR = Path(os.environ.get("DATA_DIR", "/data"))
 DATA_FILE = DATA_DIR / "x4g_state.json"
 SECRET_FILE = DATA_DIR / "x4g_secret.key"
+TELEGRAM_SETTINGS_FILE = DATA_DIR / "telegram_settings.json"
+APP_SETTINGS_FILE = DATA_DIR / "app_settings.json"
+RAILWAY_SETTINGS_FILE = DATA_DIR / "railway_settings.json"
 SAVE_LOCK = asyncio.Lock()
+BACKUP_FORMAT = "x4g-telegram-backup"
+BACKUP_VERSION = 1
+BACKUP_MARKER = "#X4G_BACKUP_V1"
+_backup_task: asyncio.Task | None = None
+_backup_dirty = False
+_backup_last_result: dict = {"ok": None, "message": "هنوز بکاپی اجرا نشده", "at": None}
+
+_TELEGRAM_ENV_MAP = {
+    "bot_token": "TELEGRAM_BOT_TOKEN",
+    "admin_ids": "TELEGRAM_ADMIN_IDS",
+    "backup_chat_id": "TELEGRAM_BACKUP_CHAT_ID",
+    "interval_hours": "TELEGRAM_BACKUP_INTERVAL_HOURS",
+    "auto_restore": "TELEGRAM_BACKUP_AUTO_RESTORE",
+}
+
+def _load_telegram_settings() -> dict:
+    try:
+        if TELEGRAM_SETTINGS_FILE.exists():
+            data = json.loads(TELEGRAM_SETTINGS_FILE.read_text(encoding="utf-8"))
+            return data if isinstance(data, dict) else {}
+    except Exception as exc:
+        logger.warning(f"Could not load Telegram settings: {exc}")
+    return {}
+
+def _apply_telegram_settings(settings: dict):
+    """تنظیمات ذخیره‌شده پنل را روی تنظیمات محیطی همین پردازش اعمال می‌کند."""
+    for key, env_name in _TELEGRAM_ENV_MAP.items():
+        if key in settings and settings[key] is not None:
+            value = settings[key]
+            if isinstance(value, bool):
+                value = "true" if value else "false"
+            os.environ[env_name] = str(value).strip()
+
+TELEGRAM_SETTINGS = _load_telegram_settings()
+_apply_telegram_settings(TELEGRAM_SETTINGS)
+
+def _load_app_settings() -> dict:
+    try:
+        if APP_SETTINGS_FILE.exists():
+            data = json.loads(APP_SETTINGS_FILE.read_text(encoding="utf-8"))
+            return data if isinstance(data, dict) else {}
+    except Exception as exc:
+        logger.warning(f"Could not load app settings: {exc}")
+    return {}
+
+def _save_app_settings(settings: dict):
+    DATA_DIR.mkdir(parents=True, exist_ok=True)
+    tmp = APP_SETTINGS_FILE.with_suffix(".tmp")
+    tmp.write_text(json.dumps(settings, ensure_ascii=False, indent=2), encoding="utf-8")
+    tmp.replace(APP_SETTINGS_FILE)
+
+def _normalise_public_base_url(value: str) -> str:
+    value = (value or "").strip().rstrip("/")
+    if not value:
+        return ""
+    parsed = urlparse(value if "://" in value else f"https://{value}")
+    if parsed.scheme not in {"http", "https"} or not parsed.netloc or not parsed.hostname:
+        raise ValueError("دامنه معتبر نیست")
+    # مسیر در دامنه پایه مجاز نیست، چون URLهای ساب باید از ریشه ثابت بمانند.
+    if parsed.path not in {"", "/"} or parsed.query or parsed.fragment:
+        raise ValueError("دامنه پایه نباید مسیر یا query داشته باشد")
+    port = f":{parsed.port}" if parsed.port else ""
+    return f"{parsed.scheme}://{parsed.hostname}{port}"
+
+def _normalise_config_host(value: str) -> str:
+    value = (value or "").strip().rstrip("/")
+    if not value:
+        return ""
+    parsed = urlparse(value if "://" in value else f"https://{value}")
+    if not parsed.hostname or parsed.path not in {"", "/"} or parsed.query or parsed.fragment:
+        raise ValueError("دامنه Railway کانفیگ معتبر نیست")
+    return parsed.hostname
+
+def _parse_railway_resource_url(value: str) -> dict:
+    """شناسه‌های project/service/environment را از URL داشبورد Railway استخراج می‌کند."""
+    value = (value or "").strip()
+    result = {}
+    if value:
+        parsed = urlparse(value)
+        parts = [p for p in parsed.path.split("/") if p]
+        try:
+            result["project_id"] = parts[parts.index("project") + 1]
+            result["service_id"] = parts[parts.index("service") + 1]
+        except (ValueError, IndexError):
+            raise ValueError("لینک Railway باید صفحه Variables همان سرویس باشد")
+        query = dict(x.split("=", 1) for x in parsed.query.split("&") if "=" in x)
+        result["environment_id"] = query.get("environmentId", "")
+    return result
+
+def _valid_railway_id(value: str) -> bool:
+    return bool(re.fullmatch(r"[A-Za-z0-9_-]{8,80}", value or ""))
+
+APP_SETTINGS = _load_app_settings()
+if APP_SETTINGS.get("public_base_url"):
+    os.environ["PUBLIC_BASE_URL"] = str(APP_SETTINGS["public_base_url"])
+if APP_SETTINGS.get("config_public_host"):
+    os.environ["CONFIG_PUBLIC_HOST"] = str(APP_SETTINGS["config_public_host"])
+
+def _load_railway_settings() -> dict:
+    try:
+        if RAILWAY_SETTINGS_FILE.exists():
+            data = json.loads(RAILWAY_SETTINGS_FILE.read_text(encoding="utf-8"))
+            return data if isinstance(data, dict) else {}
+    except Exception as exc:
+        logger.warning(f"Could not load Railway settings: {exc}")
+    return {}
+
+def _save_railway_settings(settings: dict):
+    DATA_DIR.mkdir(parents=True, exist_ok=True)
+    tmp = RAILWAY_SETTINGS_FILE.with_suffix(".tmp")
+    tmp.write_text(json.dumps(settings, ensure_ascii=False, indent=2), encoding="utf-8")
+    try:
+        os.chmod(tmp, 0o600)
+    except OSError:
+        pass
+    tmp.replace(RAILWAY_SETTINGS_FILE)
+
+RAILWAY_SETTINGS = _load_railway_settings()
+
+def _env_bool(name: str, default: bool = False) -> bool:
+    value = os.environ.get(name)
+    if value is None:
+        return default
+    return value.strip().lower() in {"1", "true", "yes", "on"}
+
+def _telegram_backup_chat_id() -> str | None:
+    """چت مقصد بکاپ؛ در صورت نبود متغیر اختصاصی، اولین ادمین ربات استفاده می‌شود."""
+    explicit = os.environ.get("TELEGRAM_BACKUP_CHAT_ID", "").strip()
+    if explicit:
+        return explicit
+    admins = os.environ.get("TELEGRAM_ADMIN_IDS", "").replace(" ", "").split(",")
+    return next((item for item in admins if item.lstrip("-").isdigit()), None)
+
+def _backup_interval_hours() -> float:
+    try:
+        return max(0.25, float(os.environ.get("TELEGRAM_BACKUP_INTERVAL_HOURS", "6") or 6))
+    except (TypeError, ValueError):
+        return 6.0
+
+def _save_telegram_settings(settings: dict):
+    DATA_DIR.mkdir(parents=True, exist_ok=True)
+    tmp = TELEGRAM_SETTINGS_FILE.with_suffix(".tmp")
+    tmp.write_text(json.dumps(settings, ensure_ascii=False, indent=2), encoding="utf-8")
+    try:
+        os.chmod(tmp, 0o600)
+    except OSError:
+        pass
+    tmp.replace(TELEGRAM_SETTINGS_FILE)
+
+def _masked_token(token: str) -> str:
+    if not token:
+        return ""
+    if len(token) <= 10:
+        return "••••••••"
+    return f"{token[:5]}••••••{token[-4:]}"
 
 def _load_or_create_secret() -> str:
     """SECRET_KEY را روی دیسک ذخیره و ثابت نگه می‌دارد.
@@ -39,14 +205,17 @@ def _load_or_create_secret() -> str:
     باعث می‌شد پسورد درست هم دیگر قبول نشود. حالا secret یک‌بار ساخته و در
     فایل ذخیره می‌شود و در ری‌استارت‌های بعدی همان مقدار خوانده می‌شود."""
     env_secret = os.environ.get("SECRET_KEY")
-    if env_secret:
-        return env_secret
     try:
         DATA_DIR.mkdir(parents=True, exist_ok=True)
+        # فایل موجود (خصوصاً secret بازیابی‌شده از بکاپ) باید بر env اولویت داشته باشد؛
+        # وگرنه رمز پنل و گروه‌ها در اولین ری‌استارت بعد از مهاجرت نامعتبر می‌شوند.
         if SECRET_FILE.exists():
             existing = SECRET_FILE.read_text(encoding="utf-8").strip()
             if existing:
                 return existing
+        if env_secret:
+            SECRET_FILE.write_text(env_secret, encoding="utf-8")
+            return env_secret
         new_secret = secrets.token_urlsafe(32)
         SECRET_FILE.write_text(new_secret, encoding="utf-8")
         return new_secret
@@ -85,6 +254,7 @@ async def load_state():
         logger.warning(f"Could not load state: {e}")
 
 async def save_state():
+    global _backup_dirty
     async with SAVE_LOCK:
         try:
             DATA_DIR.mkdir(parents=True, exist_ok=True)
@@ -98,8 +268,202 @@ async def save_state():
             async with aiofiles.open(tmp, "w", encoding="utf-8") as f:
                 await f.write(json.dumps(data, ensure_ascii=False, indent=2))
             tmp.replace(DATA_FILE)
+            _backup_dirty = True
         except Exception as e:
             logger.warning(f"Could not save state: {e}")
+
+async def build_backup_payload() -> dict:
+    """یک اسنپ‌شات کامل و قابل‌انتقال می‌سازد؛ شناسه‌ها دست‌نخورده می‌مانند."""
+    async with LINKS_LOCK:
+        links = deepcopy(LINKS)
+    async with SUBS_LOCK:
+        subs = deepcopy(SUBS)
+    return {
+        "format": BACKUP_FORMAT,
+        "version": BACKUP_VERSION,
+        "created_at": datetime.now().isoformat(),
+        "source_host": CONFIG.get("host"),
+        "state": {
+            "links": links,
+            "subs": subs,
+            "password_hash": AUTH["password_hash"],
+        },
+        # برای معتبر ماندن رمز پنل و رمز گروه‌ها بعد از مهاجرت لازم است.
+        "security": {"secret": CONFIG["secret"]},
+        # دامنه ثابت همراه بکاپ منتقل می‌شود تا مسیر ساب مشتری عوض نشود.
+        "settings": {"public_base_url": os.environ.get("PUBLIC_BASE_URL", "")},
+    }
+
+def _normalise_backup_payload(payload: dict) -> tuple[dict, str | None, dict]:
+    if not isinstance(payload, dict):
+        raise ValueError("فایل بکاپ معتبر نیست")
+    if payload.get("format") == BACKUP_FORMAT:
+        state = payload.get("state")
+        secret = (payload.get("security") or {}).get("secret")
+        settings = payload.get("settings") or {}
+    elif "links" in payload and "subs" in payload:  # سازگاری با x4g_state.json قدیمی
+        state = payload
+        secret = None
+        settings = {}
+    else:
+        raise ValueError("فرمت فایل بکاپ شناخته نشد")
+    if not isinstance(state, dict) or not isinstance(state.get("links"), dict) or not isinstance(state.get("subs"), dict):
+        raise ValueError("ساختار links/subs در بکاپ خراب است")
+    if len(state["links"]) > 100000 or len(state["subs"]) > 100000:
+        raise ValueError("تعداد رکوردهای بکاپ غیرعادی است")
+    return state, secret if isinstance(secret, str) and secret else None, settings if isinstance(settings, dict) else {}
+
+async def restore_backup_payload(payload: dict, source: str = "manual") -> dict:
+    """Restore اتمیک اطلاعات؛ UUID و uuid_key گروه‌ها را عیناً حفظ می‌کند."""
+    global APP_SETTINGS
+    state, restored_secret, restored_settings = _normalise_backup_payload(payload)
+    links = deepcopy(state["links"])
+    subs = deepcopy(state["subs"])
+
+    # فقط ارجاع‌های واقعاً موجود نگه داشته می‌شوند؛ خود شناسه‌ها هرگز بازتولید نمی‌شوند.
+    valid_link_ids = set(links)
+    for sub in subs.values():
+        if not isinstance(sub, dict):
+            raise ValueError("اطلاعات یکی از گروه‌ها خراب است")
+        ids = sub.get("link_ids", [])
+        sub["link_ids"] = [lid for lid in ids if lid in valid_link_ids] if isinstance(ids, list) else []
+    for uid, link in links.items():
+        if not isinstance(link, dict):
+            raise ValueError(f"اطلاعات کانفیگ {uid} خراب است")
+        sid = link.get("sub_id")
+        if sid not in subs:
+            link["sub_id"] = None
+
+    async with LINKS_LOCK:
+        LINKS.clear()
+        LINKS.update(links)
+    async with SUBS_LOCK:
+        SUBS.clear()
+        SUBS.update(subs)
+
+    if restored_secret:
+        CONFIG["secret"] = restored_secret
+        try:
+            DATA_DIR.mkdir(parents=True, exist_ok=True)
+            SECRET_FILE.write_text(restored_secret, encoding="utf-8")
+        except Exception as exc:
+            logger.warning(f"Could not persist restored secret: {exc}")
+    restored_domain = restored_settings.get("public_base_url")
+    if restored_domain:
+        try:
+            restored_domain = _normalise_public_base_url(str(restored_domain))
+            APP_SETTINGS = {**APP_SETTINGS, "public_base_url": restored_domain}
+            _save_app_settings(APP_SETTINGS)
+            os.environ["PUBLIC_BASE_URL"] = restored_domain
+            CONFIG["host"] = urlparse(restored_domain).hostname or CONFIG["host"]
+        except ValueError as exc:
+            logger.warning(f"Ignored invalid restored public domain: {exc}")
+
+    password_hash = state.get("password_hash")
+    if isinstance(password_hash, str) and password_hash:
+        AUTH["password_hash"] = password_hash
+    async with SESSIONS_LOCK:
+        SESSIONS.clear()
+    await save_state()
+    log_activity("backup", f"بکاپ از {source} بازیابی شد: {len(links)} کانفیگ و {len(subs)} گروه", "ok")
+    return {"ok": True, "links": len(links), "subs": len(subs)}
+
+async def send_backup_to_telegram(reason: str = "manual") -> dict:
+    global _backup_last_result
+    token = os.environ.get("TELEGRAM_BOT_TOKEN", "").strip()
+    chat_id = _telegram_backup_chat_id()
+    now = datetime.now().isoformat()
+    if not token or not chat_id:
+        result = {"ok": False, "message": "توکن ربات یا شناسه چت بکاپ تنظیم نشده", "at": now}
+        _backup_last_result = result
+        return result
+    try:
+        payload = await build_backup_payload()
+        raw = json.dumps(payload, ensure_ascii=False, indent=2).encode("utf-8")
+        filename = f"x4g-backup-{datetime.now().strftime('%Y%m%d-%H%M%S')}.json"
+        caption = f"{BACKUP_MARKER}\nبکاپ کامل X4G · {len(payload['state']['links'])} کانفیگ · {len(payload['state']['subs'])} گروه\nعلت: {reason}"
+        async with httpx.AsyncClient(timeout=httpx.Timeout(60.0, connect=15.0)) as client:
+            response = await client.post(
+                f"https://api.telegram.org/bot{token}/sendDocument",
+                data={"chat_id": chat_id, "caption": caption, "disable_notification": "true"},
+                files={"document": (filename, raw, "application/json")},
+            )
+            data = response.json()
+            if not data.get("ok"):
+                raise RuntimeError(data.get("description") or "Telegram sendDocument failed")
+            message_id = data["result"]["message_id"]
+            # پیام پین‌شده نقش اشاره‌گر آخرین بکاپ را دارد تا پنل تازه بدون تاریخچه چت آن را پیدا کند.
+            pin = await client.post(
+                f"https://api.telegram.org/bot{token}/pinChatMessage",
+                json={"chat_id": chat_id, "message_id": message_id, "disable_notification": True},
+            )
+            pin_data = pin.json()
+            pinned_ok = bool(pin_data.get("ok"))
+            if not pinned_ok:
+                logger.warning(f"Backup sent but could not pin it: {pin_data.get('description')}")
+        message = ("بکاپ کامل به تلگرام ارسال و به‌عنوان آخرین نسخه ثبت شد" if pinned_ok else
+                   "بکاپ ارسال شد، اما پین نشد؛ برای بازیابی خودکار دسترسی Pin ربات را فعال کنید")
+        result = {"ok": True, "message": message, "at": now, "filename": filename, "pinned": pinned_ok}
+        _backup_last_result = result
+        log_activity("backup", "بکاپ کامل به تلگرام ارسال شد", "ok")
+        return result
+    except Exception as exc:
+        logger.warning(f"Telegram backup failed: {exc}")
+        result = {"ok": False, "message": str(exc), "at": now}
+        _backup_last_result = result
+        return result
+
+async def fetch_latest_telegram_backup() -> dict:
+    token = os.environ.get("TELEGRAM_BOT_TOKEN", "").strip()
+    chat_id = _telegram_backup_chat_id()
+    if not token or not chat_id:
+        raise ValueError("توکن ربات یا شناسه چت بکاپ تنظیم نشده")
+    async with httpx.AsyncClient(timeout=httpx.Timeout(60.0, connect=15.0)) as client:
+        chat_res = await client.post(f"https://api.telegram.org/bot{token}/getChat", json={"chat_id": chat_id})
+        chat_data = chat_res.json()
+        if not chat_data.get("ok"):
+            raise RuntimeError(chat_data.get("description") or "دریافت چت تلگرام ناموفق بود")
+        pinned = chat_data["result"].get("pinned_message") or {}
+        document = pinned.get("document")
+        if not document or BACKUP_MARKER not in (pinned.get("caption") or ""):
+            raise ValueError("آخرین بکاپ پین‌شده X4G در چت پیدا نشد")
+        file_res = await client.post(f"https://api.telegram.org/bot{token}/getFile", json={"file_id": document["file_id"]})
+        file_data = file_res.json()
+        if not file_data.get("ok"):
+            raise RuntimeError(file_data.get("description") or "دریافت فایل تلگرام ناموفق بود")
+        download = await client.get(f"https://api.telegram.org/file/bot{token}/{file_data['result']['file_path']}")
+        download.raise_for_status()
+        if len(download.content) > 20 * 1024 * 1024:
+            raise ValueError("حجم بکاپ بیشتر از حد مجاز است")
+        return json.loads(download.content.decode("utf-8"))
+
+async def restore_latest_telegram_backup(source: str = "telegram") -> dict:
+    payload = await fetch_latest_telegram_backup()
+    return await restore_backup_payload(payload, source=source)
+
+async def _backup_loop():
+    global _backup_dirty
+    interval_seconds = _backup_interval_hours() * 3600
+    last_sent = time.time()
+    # تغییرات حداکثر ظرف ۵ دقیقه بکاپ می‌شوند؛ interval نیز بکاپ دوره‌ای اجباری است.
+    check_every = min(300.0, interval_seconds)
+    while True:
+        try:
+            await asyncio.sleep(check_every)
+            due = time.time() - last_sent >= interval_seconds
+            if not _backup_dirty and not due:
+                continue
+            had_dirty = _backup_dirty
+            _backup_dirty = False
+            result = await send_backup_to_telegram(reason="تغییر اطلاعات" if had_dirty else "زمان‌بندی خودکار")
+            if result.get("ok"):
+                last_sent = time.time()
+            else:
+                _backup_dirty = _backup_dirty or had_dirty
+        except asyncio.CancelledError:
+            break
+        except Exception as exc:
+            logger.warning(f"Scheduled backup error: {exc}")
 
 # ── In-memory state ───────────────────────────────────────────────────────────
 connections: dict = {}
@@ -192,13 +556,23 @@ async def require_auth(request: Request):
 # ── Startup / Shutdown ────────────────────────────────────────────────────────
 @app.on_event("startup")
 async def startup():
-    global http_client
+    global http_client, _backup_task
     limits = httpx.Limits(max_connections=500, max_keepalive_connections=100)
     timeout = httpx.Timeout(30.0, connect=10.0)
     http_client = httpx.AsyncClient(
         limits=limits, timeout=timeout, follow_redirects=True,
     )
+    # در نصب تازه، آخرین فایل پین‌شده تلگرام قبل از ساخت لینک پیش‌فرض بازیابی می‌شود.
+    state_missing = not DATA_FILE.exists() or DATA_FILE.stat().st_size == 0
+    if state_missing and _env_bool("TELEGRAM_BACKUP_AUTO_RESTORE", True) and _telegram_backup_chat_id():
+        try:
+            restored = await restore_latest_telegram_backup(source="تلگرام (بازیابی خودکار)")
+            logger.info(f"Automatic Telegram restore completed: {restored}")
+        except Exception as exc:
+            logger.warning(f"Automatic Telegram restore skipped/failed: {exc}")
     await load_state()
+    if os.environ.get("TELEGRAM_BOT_TOKEN") and _telegram_backup_chat_id():
+        _backup_task = asyncio.create_task(_backup_loop())
     await _tg_start_bot()
     log_activity("system", "سرور راه‌اندازی شد", "ok")
     logger.info(f"X4G v9.5 started on port {CONFIG['port']}")
@@ -206,23 +580,53 @@ async def startup():
 @app.on_event("shutdown")
 async def shutdown():
     await save_state()
+    if _backup_task:
+        _backup_task.cancel()
     await _tg_stop_bot()
     if http_client:
         await http_client.aclose()
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
+def _host_from_value(value: str) -> str:
+    value = (value or "").strip()
+    if not value:
+        return ""
+    parsed = urlparse(value if "://" in value else f"https://{value}")
+    return parsed.hostname or ""
+
 def get_host(request: Request | None = None) -> str:
-    """آدرس دامنه رو ترجیحاً از خودِ درخواست HTTP می‌گیره (هدر Host/X-Forwarded-Host)
-    چون این همیشه دقیقاً همون دامنه‌ایه که کاربر واقعاً بهش وصل شده. متغیر محیطی
-    RAILWAY_PUBLIC_DOMAIN فقط به‌عنوان fallback استفاده می‌شه، چون گاهی موقع بالا اومدن
-    کانتینر هنوز مقداردهی نشده و باعث می‌شد لینک‌ها گاهی با "localhost" ساخته بشن."""
+    """دامنه اتصال خود کانفیگ؛ عمداً از دامنه ثابت ساب جدا است.
+
+    ساب می‌تواند روی دامنه اختصاصی ماندگار باشد، ولی VLESS/XHTTP مستقیماً از
+    دامنه فعلی Railway استفاده کند تا با تعویض پنل، محتوای ساب خودکار مقصد جدید بدهد.
+    """
+    configured = os.environ.get("CONFIG_PUBLIC_HOST", "").strip()
+    railway = os.environ.get("RAILWAY_PUBLIC_DOMAIN", "").strip()
+    for candidate in (configured, railway):
+        host = _host_from_value(candidate)
+        if host and host != "localhost":
+            CONFIG["host"] = host
+            return host
     if request is not None:
         h = request.headers.get("x-forwarded-host") or request.headers.get("host")
         if h:
-            h = h.split(":")[0]
-            CONFIG["host"] = h  # کش آخرین دامنه‌ی واقعی دیده‌شده، برای جاهایی که request نداریم (مثل ربات تلگرام)
-            return h
-    return os.environ.get("RAILWAY_PUBLIC_DOMAIN", CONFIG["host"])
+            host = _host_from_value(h.split(",")[0].strip())
+            if host:
+                CONFIG["host"] = host
+                return host
+    return CONFIG["host"]
+
+def get_subscription_base(request: Request | None = None) -> str:
+    """آدرس ثابت انتشار لینک‌های ساب و صفحه گروه، مستقل از مقصد کانفیگ."""
+    public_base = os.environ.get("PUBLIC_BASE_URL", "").strip()
+    if public_base:
+        return _normalise_public_base_url(public_base)
+    if request is not None:
+        host = (request.headers.get("x-forwarded-host") or request.headers.get("host") or "").split(",")[0].strip()
+        proto = (request.headers.get("x-forwarded-proto") or request.url.scheme or "https").split(",")[0].strip()
+        if host:
+            return _normalise_public_base_url(f"{proto}://{host}")
+    return f"https://{get_host()}"
 
 def generate_uuid() -> str:
     h = secrets.token_hex(16)
@@ -230,6 +634,18 @@ def generate_uuid() -> str:
     
 def now_ir() -> datetime:
     return datetime.now(IRAN_TZ)
+
+def normalise_alpn_selection(value: str | None) -> str:
+    selected = {x.strip().lower() for x in (value or "").split(",")}
+    return ",".join(x for x in ("h3", "h2", "http/1.1") if x in selected)
+
+def effective_alpn_for_protocol(protocol: str, requested: str | None = None) -> str:
+    """ALPN انتخابی را به خروجی امن و واقعاً قابل‌استفاده هر ترابرد تبدیل می‌کند."""
+    requested_alpn = normalise_alpn_selection(requested) or DEFAULT_ALPN_BY_PROTOCOL.get(protocol, "http/1.1")
+    if protocol == "vless-ws":
+        return "http/1.1"
+    tokens = [x.strip() for x in requested_alpn.split(",") if x.strip() in {"h2", "http/1.1"}]
+    return ",".join(dict.fromkeys(tokens)) or DEFAULT_ALPN_BY_PROTOCOL.get(protocol, "h2,http/1.1")
 
 def generate_vless_link(
     uuid: str,
@@ -245,7 +661,10 @@ def generate_vless_link(
     fp = (fingerprint or DEFAULT_FINGERPRINT).strip() or DEFAULT_FINGERPRINT
     if fp not in FINGERPRINTS:
         fp = DEFAULT_FINGERPRINT
-    alpn_val = (alpn or "").strip() or DEFAULT_ALPN_BY_PROTOCOL.get(protocol, "http/1.1")
+    # WebSocket کلاسیک فقط HTTP/1.1 و XHTTP فعلی HTTP/2/1.1 را استفاده می‌کند.
+    # h3 قابل انتخاب و ذخیره است، اما تا وقتی ترابرد QUIC اضافه نشده وارد خروجی
+    # ناسازگار نمی‌شود تا مشکل قطع‌شدن Cloudflare دوباره تکرار نشود.
+    alpn_val = effective_alpn_for_protocol(protocol, alpn)
     port_val = port or DEFAULT_PORT
     if not (MIN_PORT <= port_val <= MAX_PORT):
         port_val = DEFAULT_PORT
@@ -425,8 +844,15 @@ async def subscription_single(uuid: str, request: Request):
     host = get_host(request)
     vless = vless_link_for_link(link, uuid, host)
     content = base64.b64encode(vless.encode()).decode()
-    return Response(content=content, media_type="text/plain",
-                    headers={"profile-title": quote(link["label"]), "support-url": "https://t.me/Farajian2004f"})
+    return Response(content=content, media_type="text/plain; charset=utf-8",
+                    headers={
+                        "profile-title": quote(link["label"]),
+                        "support-url": "https://t.me/Farajian2004f",
+                        "profile-update-interval": "1",
+                        "cache-control": "no-store, no-cache, must-revalidate",
+                        "cdn-cache-control": "no-store",
+                        "access-control-allow-origin": "*",
+                    })
 
 @app.get("/sub-all")
 async def subscription_all(request: Request, _=Depends(require_auth)):
@@ -464,17 +890,20 @@ async def create_sub(request: Request, _=Depends(require_auth)):
         }
     asyncio.create_task(save_state())
     log_activity("sub", f"گروه «{name}» ساخته شد", "ok")
-    host = get_host(request)
+    sub_base = get_subscription_base(request)
+    direct_base = f"https://{get_host(request)}"
     return {
         "sub_id": sub_id,
         **SUBS[sub_id],
-        "public_url": f"https://{host}/p/{uuid_key}",
-        "sub_url": f"https://{host}/sub-group/{uuid_key}",
+        "public_url": f"{sub_base}/p/{uuid_key}",
+        "sub_url": f"{sub_base}/sub-group/{uuid_key}",
+        "direct_sub_url": f"{direct_base}/sub-group/{uuid_key}",
     }
 
 @app.get("/api/subs")
 async def list_subs(request: Request, _=Depends(require_auth)):
-    host = get_host(request)
+    sub_base = get_subscription_base(request)
+    direct_base = f"https://{get_host(request)}"
     async with SUBS_LOCK:
         snap_subs = dict(SUBS)
     async with LINKS_LOCK:
@@ -493,8 +922,9 @@ async def list_subs(request: Request, _=Depends(require_auth)):
             "active_count": active_count,
             "total_used_bytes": total_used,
             "total_used_fmt": fmt_bytes(total_used),
-            "public_url": f"https://{host}/p/{s['uuid_key']}",
-            "sub_url": f"https://{host}/sub-group/{s['uuid_key']}",
+            "public_url": f"{sub_base}/p/{s['uuid_key']}",
+            "sub_url": f"{sub_base}/sub-group/{s['uuid_key']}",
+            "direct_sub_url": f"{direct_base}/sub-group/{s['uuid_key']}",
         })
     result.sort(key=lambda x: x["created_at"], reverse=True)
     return {"subs": result}
@@ -585,7 +1015,10 @@ async def sub_group_subscription(uuid_key: str, request: Request):
         headers={
             "profile-title": quote(sub["name"]),
             "support-url": "https://t.me/Farajian2004f",
-            "profile-update-interval": "12",
+            "profile-update-interval": "1",
+            "cache-control": "no-store, no-cache, must-revalidate",
+            "cdn-cache-control": "no-store",
+            "access-control-allow-origin": "*",
         }
     )
 
@@ -654,6 +1087,309 @@ async def get_stats(_=Depends(require_auth)):
 @app.get("/api/activity")
 async def get_activity(_=Depends(require_auth)):
     return {"logs": list(activity_logs)[-150:]}
+
+# ── Backup / disaster recovery ────────────────────────────────────────────────
+@app.get("/api/backup/status")
+async def backup_status(_=Depends(require_auth)):
+    token_ready = bool(os.environ.get("TELEGRAM_BOT_TOKEN", "").strip())
+    chat_id = _telegram_backup_chat_id()
+    return {
+        "telegram_ready": token_ready and bool(chat_id),
+        "chat_id": chat_id,
+        "auto_restore": _env_bool("TELEGRAM_BACKUP_AUTO_RESTORE", True),
+        "interval_hours": _backup_interval_hours(),
+        "public_base_url": os.environ.get("PUBLIC_BASE_URL", ""),
+        "last_result": _backup_last_result,
+        "links": len(LINKS),
+        "subs": len(SUBS),
+    }
+
+@app.get("/api/domain/settings")
+async def get_domain_settings(request: Request, _=Depends(require_auth)):
+    forwarded_host = request.headers.get("x-forwarded-host") or request.headers.get("host") or ""
+    forwarded_proto = request.headers.get("x-forwarded-proto") or request.url.scheme or "https"
+    current_url = _normalise_public_base_url(f"{forwarded_proto}://{forwarded_host}") if forwarded_host else ""
+    registered = os.environ.get("PUBLIC_BASE_URL", "").strip()
+    return {
+        "registered": bool(registered),
+        "public_base_url": registered,
+        "current_url": current_url,
+        "config_host": get_host(request),
+        "is_temporary_railway": "railway.app" in (urlparse(registered or current_url).hostname or ""),
+    }
+
+@app.put("/api/domain/settings")
+async def update_domain_settings(request: Request, _=Depends(require_auth)):
+    global APP_SETTINGS
+    body = await request.json()
+    try:
+        public_url = _normalise_public_base_url(str(body.get("public_base_url") or ""))
+        config_host = _normalise_config_host(str(body.get("config_public_host") or ""))
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    APP_SETTINGS = {
+        **APP_SETTINGS,
+        "public_base_url": public_url,
+        "config_public_host": config_host,
+    }
+    _save_app_settings(APP_SETTINGS)
+    if public_url:
+        os.environ["PUBLIC_BASE_URL"] = public_url
+    else:
+        os.environ.pop("PUBLIC_BASE_URL", None)
+    if config_host:
+        os.environ["CONFIG_PUBLIC_HOST"] = config_host
+        CONFIG["host"] = config_host
+    else:
+        os.environ.pop("CONFIG_PUBLIC_HOST", None)
+    await save_state()  # بکاپ خودکار تنظیم دامنه را هم ثبت می‌کند.
+    log_activity("backup", f"دامنه ساب و کانفیگ از داخل پنل ذخیره شدند", "ok")
+    return {"ok": True, "public_base_url": public_url, "config_public_host": config_host}
+
+@app.post("/api/domain/register-current")
+async def register_current_domain(request: Request, _=Depends(require_auth)):
+    forwarded_host = request.headers.get("x-forwarded-host") or request.headers.get("host")
+    forwarded_proto = request.headers.get("x-forwarded-proto") or request.url.scheme or "https"
+    if not forwarded_host:
+        raise HTTPException(status_code=400, detail="دامنه درخواست قابل تشخیص نیست")
+    public_url = _normalise_public_base_url(f"{forwarded_proto}://{forwarded_host}")
+    global APP_SETTINGS
+    APP_SETTINGS = {**APP_SETTINGS, "public_base_url": public_url}
+    _save_app_settings(APP_SETTINGS)
+    os.environ["PUBLIC_BASE_URL"] = public_url
+    await save_state()
+    log_activity("backup", f"دامنه فعلی به‌عنوان دامنه ثابت ثبت شد: {public_url}", "ok")
+    return {"ok": True, "public_base_url": public_url, "is_temporary_railway": "railway.app" in (urlparse(public_url).hostname or "")}
+
+def _railway_resolved_settings() -> dict:
+    project_id = RAILWAY_SETTINGS.get("project_id") or os.environ.get("RAILWAY_PROJECT_ID", "")
+    service_id = RAILWAY_SETTINGS.get("service_id") or os.environ.get("RAILWAY_SERVICE_ID", "")
+    environment_id = RAILWAY_SETTINGS.get("environment_id") or os.environ.get("RAILWAY_ENVIRONMENT_ID", "")
+    dashboard_url = RAILWAY_SETTINGS.get("dashboard_url", "")
+    if not dashboard_url and project_id and service_id and environment_id:
+        dashboard_url = f"https://railway.com/project/{project_id}/service/{service_id}/variables?environmentId={environment_id}"
+    return {
+        "api_token": RAILWAY_SETTINGS.get("api_token", ""),
+        "token_type": RAILWAY_SETTINGS.get("token_type", "account"),
+        "project_id": project_id,
+        "service_id": service_id,
+        "environment_id": environment_id,
+        "dashboard_url": dashboard_url,
+    }
+
+def _railway_headers(settings: dict) -> dict:
+    token = settings.get("api_token", "")
+    header = "Project-Access-Token" if settings.get("token_type") == "project" else "Authorization"
+    value = token if header == "Project-Access-Token" else f"Bearer {token}"
+    return {header: value, "Content-Type": "application/json"}
+
+async def _railway_graphql(settings: dict, query: str, variables: dict) -> dict:
+    if not settings.get("api_token"):
+        raise ValueError("Railway API Token وارد نشده است")
+    async with httpx.AsyncClient(timeout=httpx.Timeout(40.0, connect=15.0)) as client:
+        response = await client.post(
+            "https://backboard.railway.com/graphql/v2",
+            headers=_railway_headers(settings),
+            json={"query": query, "variables": variables},
+        )
+        response.raise_for_status()
+        data = response.json()
+    if data.get("errors"):
+        raise ValueError("؛ ".join(str(e.get("message", e)) for e in data["errors"]))
+    return data.get("data") or {}
+
+@app.get("/api/railway/settings")
+async def get_railway_settings(_=Depends(require_auth)):
+    settings = _railway_resolved_settings()
+    token = settings.pop("api_token", "")
+    return {**settings, "token_configured": bool(token), "token_masked": _masked_token(token)}
+
+@app.put("/api/railway/settings")
+async def update_railway_settings(request: Request, _=Depends(require_auth)):
+    global RAILWAY_SETTINGS
+    body = await request.json()
+    try:
+        parsed = _parse_railway_resource_url(str(body.get("dashboard_url") or ""))
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    current = _railway_resolved_settings()
+    token = str(body.get("api_token") or "").strip() or current.get("api_token", "")
+    settings = {
+        "api_token": token,
+        "token_type": "project" if body.get("token_type") == "project" else "account",
+        "project_id": parsed.get("project_id") or str(body.get("project_id") or current.get("project_id") or "").strip(),
+        "service_id": parsed.get("service_id") or str(body.get("service_id") or current.get("service_id") or "").strip(),
+        "environment_id": parsed.get("environment_id") or str(body.get("environment_id") or current.get("environment_id") or "").strip(),
+        "dashboard_url": str(body.get("dashboard_url") or current.get("dashboard_url") or "").strip(),
+    }
+    for key in ("project_id", "service_id", "environment_id"):
+        if not _valid_railway_id(settings[key]):
+            raise HTTPException(status_code=400, detail=f"شناسه {key} معتبر نیست")
+    RAILWAY_SETTINGS = settings
+    _save_railway_settings(settings)
+    return {"ok": True, "token_configured": bool(token), "token_masked": _masked_token(token)}
+
+@app.post("/api/railway/test")
+async def test_railway_connection(_=Depends(require_auth)):
+    settings = _railway_resolved_settings()
+    try:
+        if settings.get("token_type") == "project":
+            query = "query { projectToken { projectId environmentId } }"
+        else:
+            query = "query { me { id name } }"
+        data = await _railway_graphql(settings, query, {})
+        return {"ok": True, "message": "اتصال API Railway موفق بود", "data": data}
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=f"اتصال Railway ناموفق بود: {exc}")
+
+@app.post("/api/railway/sync-variables")
+async def sync_railway_variables(_=Depends(require_auth)):
+    settings = _railway_resolved_settings()
+    for key in ("project_id", "service_id", "environment_id"):
+        if not _valid_railway_id(settings.get(key, "")):
+            raise HTTPException(status_code=400, detail=f"شناسه {key} تنظیم نشده یا معتبر نیست")
+    public_url = os.environ.get("PUBLIC_BASE_URL", "").strip()
+    config_host = os.environ.get("CONFIG_PUBLIC_HOST", "").strip() or get_host()
+    if not public_url or not config_host:
+        raise HTTPException(status_code=400, detail="ابتدا هر دو دامنه ساب و کانفیگ را ذخیره کنید")
+    mutation = """
+    mutation variableCollectionUpsert($input: VariableCollectionUpsertInput!) {
+      variableCollectionUpsert(input: $input)
+    }
+    """
+    variables = {"input": {
+        "projectId": settings["project_id"],
+        "environmentId": settings["environment_id"],
+        "serviceId": settings["service_id"],
+        "variables": {
+            "PUBLIC_BASE_URL": public_url,
+            "CONFIG_PUBLIC_HOST": config_host,
+        },
+    }}
+    try:
+        await _railway_graphql(settings, mutation, variables)
+        log_activity("backup", "دامنه‌ها با Variables سرویس Railway همگام شدند", "ok")
+        return {
+            "ok": True,
+            "message": "متغیرها در Railway ثبت شدند؛ Railway یک Deploy جدید شروع می‌کند",
+            "variables": {"PUBLIC_BASE_URL": public_url, "CONFIG_PUBLIC_HOST": config_host},
+        }
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=f"ثبت Variables ناموفق بود: {exc}")
+
+@app.get("/api/telegram/settings")
+async def get_telegram_settings(_=Depends(require_auth)):
+    token = os.environ.get("TELEGRAM_BOT_TOKEN", "").strip()
+    return {
+        "token_configured": bool(token),
+        "token_masked": _masked_token(token),
+        "admin_ids": os.environ.get("TELEGRAM_ADMIN_IDS", ""),
+        "backup_chat_id": os.environ.get("TELEGRAM_BACKUP_CHAT_ID", ""),
+        "interval_hours": _backup_interval_hours(),
+        "auto_restore": _env_bool("TELEGRAM_BACKUP_AUTO_RESTORE", True),
+    }
+
+@app.put("/api/telegram/settings")
+async def update_telegram_settings(request: Request, _=Depends(require_auth)):
+    global TELEGRAM_SETTINGS, _backup_task
+    body = await request.json()
+    current_token = os.environ.get("TELEGRAM_BOT_TOKEN", "").strip()
+    supplied_token = str(body.get("bot_token") or "").strip()
+    token = "" if body.get("clear_token") else (supplied_token or current_token)
+    admin_ids = str(body.get("admin_ids") or "").replace(" ", "")
+    if admin_ids and any(not item.isdigit() for item in admin_ids.split(",")):
+        raise HTTPException(status_code=400, detail="آیدی ادمین‌ها باید عددی و با کاما جدا شده باشد")
+    backup_chat_id = str(body.get("backup_chat_id") or "").strip()
+    try:
+        interval = max(0.25, float(body.get("interval_hours", 6)))
+    except (TypeError, ValueError):
+        raise HTTPException(status_code=400, detail="فاصله بکاپ نامعتبر است")
+    settings = {
+        "bot_token": token,
+        "admin_ids": admin_ids,
+        "backup_chat_id": backup_chat_id,
+        "interval_hours": interval,
+        "auto_restore": bool(body.get("auto_restore", True)),
+    }
+    try:
+        _save_telegram_settings(settings)
+        TELEGRAM_SETTINGS = settings
+        _apply_telegram_settings(settings)
+        from telegram_bot import reconfigure_bot
+        await reconfigure_bot(token, admin_ids)
+        if _backup_task:
+            _backup_task.cancel()
+            _backup_task = None
+        if token and _telegram_backup_chat_id():
+            _backup_task = asyncio.create_task(_backup_loop())
+        log_activity("backup", "تنظیمات تلگرام از داخل پنل ذخیره شد", "ok")
+        return {"ok": True, "token_configured": bool(token), "token_masked": _masked_token(token)}
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"ذخیره تنظیمات ناموفق بود: {exc}")
+
+@app.post("/api/telegram/test")
+async def test_telegram_settings(request: Request, _=Depends(require_auth)):
+    try:
+        body = await request.json()
+    except Exception:
+        body = {}
+    token = str(body.get("bot_token") or os.environ.get("TELEGRAM_BOT_TOKEN", "")).strip()
+    if not token:
+        raise HTTPException(status_code=400, detail="توکن ربات تنظیم نشده است")
+    try:
+        async with httpx.AsyncClient(timeout=20.0) as client:
+            response = await client.get(f"https://api.telegram.org/bot{token}/getMe")
+            data = response.json()
+        if not data.get("ok"):
+            raise ValueError(data.get("description") or "توکن نامعتبر است")
+        bot = data["result"]
+        return {"ok": True, "username": bot.get("username"), "name": bot.get("first_name")}
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=f"اتصال به تلگرام ناموفق بود: {exc}")
+
+@app.get("/api/backup/download")
+async def download_backup(_=Depends(require_auth)):
+    payload = await build_backup_payload()
+    raw = json.dumps(payload, ensure_ascii=False, indent=2).encode("utf-8")
+    filename = f"x4g-backup-{datetime.now().strftime('%Y%m%d-%H%M%S')}.json"
+    return Response(
+        content=raw,
+        media_type="application/json",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+@app.post("/api/backup/telegram")
+async def backup_to_telegram(_=Depends(require_auth)):
+    result = await send_backup_to_telegram(reason="درخواست دستی از پنل")
+    if not result.get("ok"):
+        raise HTTPException(status_code=502, detail=result.get("message"))
+    return result
+
+@app.post("/api/backup/restore-telegram")
+async def restore_from_telegram(token=Depends(require_auth)):
+    try:
+        result = await restore_latest_telegram_backup(source="آخرین بکاپ تلگرام")
+        async with SESSIONS_LOCK:
+            SESSIONS[token] = time.time() + SESSION_TTL
+        return result
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+@app.post("/api/backup/restore")
+async def restore_uploaded_backup(request: Request, token=Depends(require_auth)):
+    raw = await request.body()
+    if len(raw) > 20 * 1024 * 1024:
+        raise HTTPException(status_code=413, detail="حجم فایل بیشتر از ۲۰ مگابایت است")
+    try:
+        payload = json.loads(raw.decode("utf-8"))
+        result = await restore_backup_payload(payload, source="فایل آپلودشده")
+        async with SESSIONS_LOCK:
+            SESSIONS[token] = time.time() + SESSION_TTL
+        return result
+    except (ValueError, UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
 
 # ── Live connections (with IP) ────────────────────────────────────────────────
 @app.get("/api/connections")
@@ -752,7 +1488,7 @@ async def make_link(
             "sub_id": sub_id,
             "protocol": protocol,
             "fingerprint": fingerprint,
-            "alpn": (alpn or "").strip()[:100],
+            "alpn": normalise_alpn_selection(alpn),
             "port": port,
             "ip_limit": max(0, ip_limit),
             "speed_limit_bytes": max(0, speed_limit_bytes),
@@ -892,17 +1628,21 @@ async def create_link(request: Request, _=Depends(require_auth)):
     )
 
     host = get_host(request)
+    sub_base = get_subscription_base(request)
     return {
         "uuid": uid,
         **link,
         "expired": False,
+        "effective_alpn": effective_alpn_for_protocol(link.get("protocol", DEFAULT_PROTOCOL), link.get("alpn")),
         "vless_link": vless_link_for_link(link, uid, host),
-        "sub_url": f"https://{host}/sub/{uid}",
+        "sub_url": f"{sub_base}/sub/{uid}",
+        "direct_sub_url": f"https://{host}/sub/{uid}",
     }
 
 @app.get("/api/links")
 async def list_links(request: Request, _=Depends(require_auth)):
     host = get_host(request)
+    sub_base = get_subscription_base(request)
     async with LINKS_LOCK:
         snap = dict(LINKS)
     result = []
@@ -913,8 +1653,10 @@ async def list_links(request: Request, _=Depends(require_auth)):
             **d,
             "protocol": proto,
             "expired": is_link_expired(d),
+            "effective_alpn": effective_alpn_for_protocol(proto, d.get("alpn")),
             "vless_link": vless_link_for_link(d, uid, host),
-            "sub_url": f"https://{host}/sub/{uid}",
+            "sub_url": f"{sub_base}/sub/{uid}",
+            "direct_sub_url": f"https://{host}/sub/{uid}",
             "connected_ips": len(unique_ips_for_uuid(uid)),
         })
     result.sort(key=lambda x: x["created_at"], reverse=True)
@@ -950,7 +1692,7 @@ async def update_link(uid: str, request: Request, _=Depends(require_auth)):
             fp = str(body.get("fingerprint") or DEFAULT_FINGERPRINT).strip().lower()
             link["fingerprint"] = fp if fp in FINGERPRINTS else DEFAULT_FINGERPRINT
         if "alpn" in body:
-            link["alpn"] = str(body.get("alpn") or "").strip()[:100]
+            link["alpn"] = normalise_alpn_selection(str(body.get("alpn") or ""))
         if "port" in body:
             try:
                 p = int(body.get("port") or DEFAULT_PORT)
@@ -988,6 +1730,20 @@ async def update_link(uid: str, request: Request, _=Depends(require_auth)):
 
     asyncio.create_task(save_state())
     return {"ok": True}
+
+@app.post("/api/links/actions/unlimit-all")
+async def unlimit_all_link_speeds(_=Depends(require_auth)):
+    from speed_limit import reset_bucket
+    changed = 0
+    async with LINKS_LOCK:
+        for uid, link in LINKS.items():
+            if int(link.get("speed_limit_bytes", 0) or 0) > 0:
+                link["speed_limit_bytes"] = 0
+                reset_bucket(uid)
+                changed += 1
+    await save_state()
+    log_activity("link", f"محدودیت سرعت {changed} کانفیگ برداشته شد", "ok")
+    return {"ok": True, "changed": changed, "message": "همه کانفیگ‌ها روی سرعت نامحدود قرار گرفتند"}
 
 @app.delete("/api/links/{uid}")
 async def delete_link(uid: str, _=Depends(require_auth)):
@@ -1069,6 +1825,7 @@ async def public_sub_data(uuid_key: str, request: Request):
             return JSONResponse({"locked": True, "name": sub["name"]})
 
     host = get_host(request)
+    sub_base = get_subscription_base(request)
     link_ids = sub.get("link_ids", [])
     async with LINKS_LOCK:
         snap = dict(LINKS)
@@ -1094,7 +1851,7 @@ async def public_sub_data(uuid_key: str, request: Request):
             "limit_fmt": "∞" if link.get("limit_bytes", 0) == 0 else fmt_bytes(link["limit_bytes"]),
             "expires_at": link.get("expires_at"),
             "vless_link": vless_link_for_link(link, lid, host),
-            "sub_url": f"https://{host}/sub/{lid}",
+            "sub_url": f"{sub_base}/sub/{lid}",
             "connections": conn_count,
             "ip_limit": link.get("ip_limit", 0),
             "speed_limit_bytes": link.get("speed_limit_bytes", 0),
@@ -1105,7 +1862,7 @@ async def public_sub_data(uuid_key: str, request: Request):
         "locked": False,
         "name": sub["name"],
         "desc": sub.get("desc", ""),
-        "sub_url": f"https://{host}/sub-group/{uuid_key}",
+        "sub_url": f"{sub_base}/sub-group/{uuid_key}",
         "active_connections": active_conns,
         "total_used_fmt": fmt_bytes(total_used),
         "links": links_out,
@@ -1132,4 +1889,9 @@ async def test_ws_redirect():
     return HTMLResponse(content="<script>location.href='/dashboard'</script>")
 
 if __name__ == "__main__":
-    uvicorn.run("main:app", host="0.0.0.0", port=CONFIG["port"], log_level="info", workers=1)
+    uvicorn.run(
+        app, host="0.0.0.0", port=CONFIG["port"], log_level="info",
+        backlog=2048, timeout_keep_alive=30, ws_max_size=16 * 1024 * 1024,
+        ws_max_queue=64, ws_ping_interval=20.0, ws_ping_timeout=20.0,
+        ws_per_message_deflate=False,  # داده تونل از قبل فشرده است؛ حذف CPU اضافه
+    )

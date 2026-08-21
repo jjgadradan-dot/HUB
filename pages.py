@@ -329,6 +329,12 @@ a{color:inherit;text-decoration:none}
 .chip{font-size:10.5px;font-weight:700;padding:5px 12px;border-radius:8px;background:var(--accent-d);color:var(--t2);border:1px solid var(--card-b);cursor:pointer;transition:.15s;white-space:nowrap}
 .chip:hover{background:rgba(59,130,246,.18);color:var(--accent2)}
 .chip.active{background:var(--accent);color:#fff;border-color:var(--accent);box-shadow:0 3px 10px rgba(59,130,246,.35)}
+.alpn-selector{display:flex;gap:7px;flex-wrap:wrap;margin-top:8px}
+.alpn-opt{display:flex;align-items:center;gap:6px;padding:7px 11px;border-radius:9px;background:var(--accent-d);border:1px solid var(--card-b);color:var(--t2);font-size:10.5px;font-weight:700;cursor:pointer;transition:.15s;user-select:none}
+.alpn-opt:hover{border-color:var(--card-bh);color:var(--accent2)}
+.alpn-opt.active{background:var(--accent);border-color:var(--accent);color:#fff;box-shadow:0 3px 10px rgba(59,130,246,.28)}
+.alpn-opt.experimental.active{background:var(--purple);border-color:var(--purple)}
+.alpn-effective{font-size:9.5px;color:var(--t3);margin-top:9px;line-height:1.7}
 .proto-cards{display:grid;grid-template-columns:repeat(3,1fr);gap:9px}
 .proto-card{border:1.5px solid var(--card-b);border-radius:13px;padding:13px 12px;cursor:pointer;transition:.18s;text-align:center;position:relative;background:rgba(0,0,0,.1)}
 [data-theme="light"] .proto-card{background:#fff}
@@ -570,6 +576,33 @@ a{color:inherit;text-decoration:none}
 
 @media(max-width:500px){.sub-grid{grid-template-columns:1fr}.sub-card-stats{grid-template-columns:repeat(3,1fr)}}
 
+/* ══════ آموزش انتقال پنل ══════ */
+.mig-hero{background:linear-gradient(135deg,rgba(59,130,246,.16),rgba(139,92,246,.12));border:1px solid var(--card-bh);border-radius:22px;padding:24px;margin-bottom:18px;position:relative;overflow:hidden}
+.mig-hero::after{content:'';position:absolute;left:-60px;top:-80px;width:230px;height:230px;border-radius:50%;background:radial-gradient(circle,rgba(139,92,246,.22),transparent 68%)}
+.mig-hero-title{font-size:18px;font-weight:800;color:var(--t1);display:flex;align-items:center;gap:9px;position:relative;z-index:1}
+.mig-hero-sub{font-size:11.5px;color:var(--t2);line-height:1.9;margin-top:7px;max-width:720px;position:relative;z-index:1}
+.mig-flow{display:grid;grid-template-columns:1fr auto 1fr auto 1fr;align-items:center;gap:10px;margin:16px 0 20px}
+.mig-flow-item{background:var(--card);border:1px solid var(--card-b);border-radius:15px;padding:14px;text-align:center;font-size:11px;color:var(--t2);font-weight:700}
+.mig-flow-item i{display:block;font-size:22px;color:var(--accent);margin-bottom:7px}
+.mig-flow-arrow{color:var(--accent);font-size:20px}
+.mig-section{background:var(--card);border:1px solid var(--card-b);border-radius:20px;overflow:hidden;margin-bottom:16px}
+.mig-section-head{display:flex;align-items:center;gap:12px;padding:18px 20px;background:var(--accent-d);border-bottom:1px solid var(--card-b)}
+.mig-section-num{width:34px;height:34px;border-radius:11px;background:var(--accent);color:#fff;display:flex;align-items:center;justify-content:center;font-weight:800;flex-shrink:0}
+.mig-section-title{font-size:14px;font-weight:800;color:var(--t1)}
+.mig-section-sub{font-size:10px;color:var(--t3);margin-top:2px}
+.mig-steps{padding:8px 20px 18px}
+.mig-step{display:flex;gap:12px;padding:14px 0;border-bottom:1px solid var(--card-b)}
+.mig-step:last-child{border-bottom:none}
+.mig-step-num{width:27px;height:27px;border-radius:50%;background:var(--accent-d);border:1px solid var(--card-bh);color:var(--accent2);display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:800;flex-shrink:0}
+.mig-step-body{flex:1;min-width:0}
+.mig-step-title{font-size:12.5px;font-weight:800;color:var(--t1);margin-bottom:4px}
+.mig-step-text{font-size:11px;color:var(--t2);line-height:1.9}
+.mig-code{direction:ltr;text-align:left;background:rgba(0,0,0,.22);border:1px solid var(--card-b);border-radius:9px;padding:9px 12px;margin-top:8px;font-family:ui-monospace,monospace;font-size:10.5px;color:var(--accent2);word-break:break-all;user-select:all}
+[data-theme="light"] .mig-code{background:rgba(37,99,235,.05)}
+.mig-check{display:flex;align-items:flex-start;gap:8px;background:var(--green-bg);border:1px solid rgba(16,185,129,.2);color:var(--green-t);padding:11px 13px;border-radius:11px;font-size:11px;line-height:1.8;margin-top:10px}
+.mig-danger{display:flex;align-items:flex-start;gap:8px;background:var(--red-bg);border:1px solid rgba(239,68,68,.2);color:var(--red-t);padding:11px 13px;border-radius:11px;font-size:11px;line-height:1.8;margin-top:10px}
+@media(max-width:650px){.mig-flow{grid-template-columns:1fr}.mig-flow-arrow{transform:rotate(90deg);text-align:center}.mig-hero{padding:19px}.mig-steps{padding:6px 15px 14px}}
+
 .modal-bg{display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:500;align-items:center;justify-content:center;backdrop-filter:blur(4px)}
 .modal-bg.open{display:flex}
 .modal{background:var(--card);border:1px solid var(--card-b);border-radius:20px;padding:28px 26px;max-width:520px;width:calc(100% - 32px);max-height:90vh;overflow-y:auto;position:relative;animation:fi .2s ease}
@@ -776,7 +809,15 @@ a{color:inherit;text-decoration:none}
           <option value="randomized">randomized</option>
         </select>
       </div>
-      <div class="fg" style="flex:1"><label>ALPN (خالی = پیش‌فرض)</label><input class="fi" id="el-alpn" placeholder="مثلاً: h2,http/1.1" style="width:100%"></div>
+      <div class="fg" style="flex:1"><label>ALPN چندانتخابی</label>
+        <input type="hidden" id="el-alpn" value="">
+        <div class="alpn-selector" id="el-alpn-selector" style="margin-top:0">
+          <button type="button" class="alpn-opt" data-value="http/1.1" onclick="toggleAlpnOption('el',this)">http/1.1</button>
+          <button type="button" class="alpn-opt" data-value="h2" onclick="toggleAlpnOption('el',this)">h2</button>
+          <button type="button" class="alpn-opt experimental" data-value="h3" onclick="toggleAlpnOption('el',this)">h3 جدید</button>
+        </div>
+        <div class="alpn-effective" id="el-alpn-effective">بدون انتخاب = خودکار و امن</div>
+      </div>
     </div>
     <div class="form-row" style="margin-bottom:16px">
       <div class="fg" style="flex:1"><label>پورت اتصال</label><input class="fi" id="el-port" type="number" min="1" max="65535" style="width:100%"></div>
@@ -823,6 +864,8 @@ a{color:inherit;text-decoration:none}
     <div class="nav-it" data-pg="logs"><i class="ti ti-history"></i> لاگ فعالیت‌ها</div>
     <div class="nav-it" data-pg="errors"><i class="ti ti-alert-triangle"></i> خطاها</div>
     <div class="nav-it" data-pg="testws"><i class="ti ti-wifi"></i> تست WebSocket</div>
+    <div class="nav-it" data-pg="migration"><i class="ti ti-book-2"></i> آموزش انتقال پنل</div>
+    <div class="nav-it" data-pg="backup"><i class="ti ti-cloud-upload"></i> بکاپ و بازیابی</div>
     <div class="nav-it" data-pg="settings"><i class="ti ti-settings"></i> تنظیمات</div>
     <div class="nav-it" data-pg="support"><i class="ti ti-headset"></i> پشتیبانی</div>
   </div>
@@ -893,7 +936,7 @@ a{color:inherit;text-decoration:none}
 <section class="pg" id="pg-links">
   <div class="topbar">
     <div><div class="tb-title"><i class="ti ti-link-plus"></i> کانفیگ‌ها</div><div class="tb-sub">ساخت و مدیریت کانفیگ با سهمیه، انقضا و گروه‌بندی</div></div>
-    <div class="tb-right"><span class="badge bg-blue" id="links-pg-cnt">۰ کانفیگ</span></div>
+    <div class="tb-right"><button class="btn btn-g" onclick="unlimitAllSpeeds()"><i class="ti ti-rocket"></i> حداکثر سرعت همه</button><span class="badge bg-blue" id="links-pg-cnt">۰ کانفیگ</span></div>
   </div>
   <div class="create-panel">
     <div class="cp-head">
@@ -986,17 +1029,20 @@ a{color:inherit;text-decoration:none}
           </select>
         </div>
         <div class="cp-block">
-          <div class="cp-block-label"><i class="ti ti-antenna-bars-5"></i> ALPN</div>
-          <select class="cp-input-full fs" id="nl-alpn-preset" onchange="onAlpnPresetChange()">
-            <option value="">پیش‌فرض پروتکل</option>
-            <option value="h2,http/1.1">h2,http/1.1</option>
-            <option value="http/1.1">http/1.1</option>
-            <option value="h2">h2</option>
-            <option value="__custom__">دستی...</option>
-          </select>
-          <div class="cp-mini-row">
-            <input class="cp-input-full" id="nl-alpn" placeholder="مقدار دستی ALPN" style="display:none">
+          <div class="cp-block-label"><i class="ti ti-antenna-bars-5"></i> ALPN چندانتخابی</div>
+          <input type="hidden" id="nl-alpn" value="">
+          <div class="alpn-selector" id="nl-alpn-selector">
+            <button type="button" class="alpn-opt" data-value="http/1.1" onclick="toggleAlpnOption('nl',this)"><i class="ti ti-world"></i> HTTP/1.1</button>
+            <button type="button" class="alpn-opt" data-value="h2" onclick="toggleAlpnOption('nl',this)"><i class="ti ti-stack-2"></i> HTTP/2 (h2)</button>
+            <button type="button" class="alpn-opt experimental" data-value="h3" onclick="toggleAlpnOption('nl',this)"><i class="ti ti-bolt"></i> HTTP/3 (h3) جدید</button>
           </div>
+          <div class="chip-row">
+            <span class="chip active" onclick="setAlpnProfile('nl','',this)">خودکار و امن</span>
+            <span class="chip" onclick="setAlpnProfile('nl','http/1.1',this)">فقط WS</span>
+            <span class="chip" onclick="setAlpnProfile('nl','h2,http/1.1',this)">ترکیبی h2 + http/1.1</span>
+            <span class="chip" onclick="setAlpnProfile('nl','h3,h2,http/1.1',this)">همه باهم</span>
+          </div>
+          <div class="alpn-effective" id="nl-alpn-effective">پیشنهادی: حالت خودکار؛ WS با http/1.1 و XHTTP با h2,http/1.1 خروجی می‌گیرد.</div>
         </div>
       </div>
       <div class="cp-row mb16">
@@ -1209,6 +1255,203 @@ a{color:inherit;text-decoration:none}
     </div>
   </div>
 </section>
+<section class="pg" id="pg-migration">
+  <div class="topbar">
+    <div><div class="tb-title"><i class="ti ti-book-2"></i> آموزش انتقال پنل</div><div class="tb-sub">راهنمای جدا و مرحله‌به‌مرحله برای وقتی پنل قدیمی خراب می‌شود</div></div>
+    <div class="tb-right"><button class="btn btn-p" onclick="navTo('backup')"><i class="ti ti-cloud-upload"></i> رفتن به بکاپ</button></div>
+  </div>
+
+  <div class="mig-hero">
+    <div class="mig-hero-title"><i class="ti ti-lifebuoy"></i> هدف خیلی ساده چیست؟</div>
+    <div class="mig-hero-sub">لینک ساب مشتری همیشه روی <b>ping101.kdns.fr</b> می‌ماند. وقتی پنل عوض شد، مشتری لینک تازه نمی‌گیرد؛ فقط Update Subscription می‌زند و کانفیگ با دامنه Railway جدید دریافت می‌کند.</div>
+  </div>
+
+  <div class="mig-flow">
+    <div class="mig-flow-item"><i class="ti ti-cloud-upload"></i> بکاپ در تلگرام</div>
+    <div class="mig-flow-arrow"><i class="ti ti-arrow-left"></i></div>
+    <div class="mig-flow-item"><i class="ti ti-server-2"></i> ساخت پنل Railway جدید</div>
+    <div class="mig-flow-arrow"><i class="ti ti-arrow-left"></i></div>
+    <div class="mig-flow-item"><i class="ti ti-refresh"></i> مشتری فقط ساب را Update می‌کند</div>
+  </div>
+
+  <div class="mig-section">
+    <div class="mig-section-head"><div class="mig-section-num">۱</div><div><div class="mig-section-title">کارهایی که همین حالا روی پنل سالم انجام بده</div><div class="mig-section-sub">این بخش را قبل از خراب‌شدن پنل انجام بده</div></div></div>
+    <div class="mig-steps">
+      <div class="mig-step"><div class="mig-step-num">۱</div><div class="mig-step-body"><div class="mig-step-title">تلگرام را تنظیم کن</div><div class="mig-step-text">از منو وارد «بکاپ و بازیابی» شو. توکن ربات، آیدی ادمین و آیدی چت بکاپ را وارد کن؛ سپس «ذخیره تنظیمات» و بعد «تست اتصال» را بزن.</div></div></div>
+      <div class="mig-step"><div class="mig-step-num">۲</div><div class="mig-step-body"><div class="mig-step-title">دامنه ثابت ساب را ثبت کن</div><div class="mig-step-text">در کادر دامنه ثابت این مقدار را وارد کن و «ذخیره دامنه» را بزن:</div><div class="mig-code">https://ping101.kdns.fr</div></div></div>
+      <div class="mig-step"><div class="mig-step-num">۳</div><div class="mig-step-body"><div class="mig-step-title">یک بکاپ تازه بفرست</div><div class="mig-step-text">دکمه «ارسال بکاپ الان» را بزن. داخل تلگرام باید یک فایل JSON دریافت کنی و پیام آن باید Pin شده باشد.</div></div></div>
+      <div class="mig-step"><div class="mig-step-num">۴</div><div class="mig-step-body"><div class="mig-step-title">فایل را نگه دار</div><div class="mig-step-text">برای اطمینان، فایل JSON تلگرام را یک‌بار دانلود و در گوشی یا کامپیوتر نگه دار.</div><div class="mig-check"><i class="ti ti-circle-check"></i><span>اگر فایل JSON و پیام پین‌شده را داری، برای روز خرابی آماده‌ای.</span></div></div></div>
+    </div>
+  </div>
+
+  <div class="mig-section">
+    <div class="mig-section-head"><div class="mig-section-num">۲</div><div><div class="mig-section-title">ساخت پنل جدید از GitHub</div><div class="mig-section-sub">وقتی پنل قدیمی دیگر کار نمی‌کند</div></div></div>
+    <div class="mig-steps">
+      <div class="mig-step"><div class="mig-step-num">۱</div><div class="mig-step-body"><div class="mig-step-title">آخرین کد را در GitHub آماده کن</div><div class="mig-step-text">در GitHub مطمئن شو تغییرات Pull Request وارد شاخه <b>main</b> شده‌اند. بعد در Railway گزینه Deploy from GitHub Repo را بزن و همین مخزن HUB را انتخاب کن.</div><div class="mig-code">Repository: jjgadradan-dot/HUB &nbsp; | &nbsp; Branch: main</div></div></div>
+      <div class="mig-step"><div class="mig-step-num">۲</div><div class="mig-step-body"><div class="mig-step-title">صبر کن Deploy سبز شود</div><div class="mig-step-text">در قسمت Deployments صبر کن وضعیت به Success برسد. اگر قرمز بود، اول لاگ خطا را بررسی کن.</div></div></div>
+      <div class="mig-step"><div class="mig-step-num">۳</div><div class="mig-step-body"><div class="mig-step-title">Volume دائمی بساز</div><div class="mig-step-text">در Railway یک Volume بساز، مسیر آن را <b>/data</b> قرار بده و این Variable را ثبت کن:</div><div class="mig-code">DATA_DIR=/data</div></div></div>
+      <div class="mig-step"><div class="mig-step-num">۴</div><div class="mig-step-body"><div class="mig-step-title">دامنه Railway جدید را پیدا کن</div><div class="mig-step-text">از Settings → Networking دامنه‌ای که به <b>up.railway.app</b> ختم می‌شود کپی و نگه دار. دیگر لازم نیست دستی وارد Variables شوی.</div><div class="mig-code">new-panel.up.railway.app</div></div></div>
+    </div>
+  </div>
+
+  <div class="mig-section">
+    <div class="mig-section-head"><div class="mig-section-num">۳</div><div><div class="mig-section-title">برگرداندن اطلاعات روی پنل جدید</div><div class="mig-section-sub">UUIDها و گروه‌های قدیمی دوباره بالا می‌آیند</div></div></div>
+    <div class="mig-steps">
+      <div class="mig-step"><div class="mig-step-num">۱</div><div class="mig-step-body"><div class="mig-step-title">وارد پنل جدید شو</div><div class="mig-step-text">دامنه Railway جدید را باز کن، به /dashboard برو و با رمز پنل وارد شو. اگر هنوز بازیابی نشده، رمز اولیه X4GKING است.</div></div></div>
+      <div class="mig-step"><div class="mig-step-num">۲</div><div class="mig-step-body"><div class="mig-step-title">همان تلگرام قبلی را تنظیم کن</div><div class="mig-step-text">در «بکاپ و بازیابی» همان توکن ربات و همان آیدی چت قبلی را وارد و ذخیره کن.</div></div></div>
+      <div class="mig-step"><div class="mig-step-num">۳</div><div class="mig-step-body"><div class="mig-step-title">آخرین بکاپ را Restore کن</div><div class="mig-step-text">«بازیابی آخرین بکاپ تلگرام» را بزن. اگر جواب نداد، فایل JSON ذخیره‌شده را انتخاب کن و «بازیابی فایل انتخاب‌شده» را بزن.</div></div></div>
+      <div class="mig-step"><div class="mig-step-num">۴</div><div class="mig-step-body"><div class="mig-step-title">دو دامنه را داخل پنل وارد کن</div><div class="mig-step-text">در صفحه بکاپ، دامنه ثابت ساب و دامنه Railway جدید را در دو کادر جدا وارد و «ذخیره و فعال‌سازی فوری» را بزن. اگر API Token داری، «ثبت دامنه‌ها در Variables» را هم بزن:</div><div class="mig-code">Subscription: https://ping101.kdns.fr<br>Config host: new-panel.up.railway.app</div></div></div>
+    </div>
+  </div>
+
+  <div class="mig-section">
+    <div class="mig-section-head"><div class="mig-section-num">۴</div><div><div class="mig-section-title">وصل‌کردن دامنه ثابت به پنل جدید</div><div class="mig-section-sub">مهم‌ترین مرحله برای اینکه لینک مشتری عوض نشود</div></div></div>
+    <div class="mig-steps">
+      <div class="mig-step"><div class="mig-step-num">۱</div><div class="mig-step-body"><div class="mig-step-title">Custom Domain را به Railway جدید اضافه کن</div><div class="mig-step-text">در سرویس جدید وارد Settings → Networking شو، Add Custom Domain را بزن و دامنه زیر را اضافه کن:</div><div class="mig-code">ping101.kdns.fr</div></div></div>
+      <div class="mig-step"><div class="mig-step-num">۲</div><div class="mig-step-body"><div class="mig-step-title">رکورد DNS را عوض کن</div><div class="mig-step-text">Railway یک Target به تو می‌دهد. در مدیریت DNS رکورد CNAME مربوط به ping101 را به همان Target جدید تغییر بده.</div><div class="mig-code">Type: CNAME &nbsp; | &nbsp; Name: ping101 &nbsp; | &nbsp; Target: Railway new target</div></div></div>
+      <div class="mig-step"><div class="mig-step-num">۳</div><div class="mig-step-body"><div class="mig-step-title">سلامت دامنه را آزمایش کن</div><div class="mig-step-text">چند دقیقه صبر کن و این آدرس را باز کن:</div><div class="mig-code">https://ping101.kdns.fr/health</div><div class="mig-check"><i class="ti ti-circle-check"></i><span>اگر status برابر ok بود، دامنه ثابت به پنل جدید وصل شده است.</span></div></div></div>
+      <div class="mig-step"><div class="mig-step-num">۴</div><div class="mig-step-body"><div class="mig-step-title">مشتری فقط Update بزند</div><div class="mig-step-text">هیچ لینک جدیدی برای مشتری نفرست. مشتری در برنامه V2Ray گزینه Update Subscription را می‌زند و کانفیگ با Railway جدید دریافت می‌کند.</div></div></div>
+    </div>
+  </div>
+
+  <div class="mig-section">
+    <div class="mig-section-head"><div class="mig-section-num">✓</div><div><div class="mig-section-title">کنترل نهایی</div><div class="mig-section-sub">قبل از اعلام آماده‌بودن سرویس</div></div></div>
+    <div class="mig-steps">
+      <div class="mig-danger"><i class="ti ti-alert-triangle"></i><span>پنل قدیمی را تا وقتی /health دامنه ثابت روی پنل جدید باز نشده حذف نکن.</span></div>
+      <div class="mig-check"><i class="ti ti-checks"></i><span>بکاپ Restore شده · گروه‌ها دیده می‌شوند · ساب روی ping101.kdns.fr است · کانفیگ داخل ساب دامنه Railway جدید دارد · اتصال تست شده است.</span></div>
+    </div>
+  </div>
+</section>
+<section class="pg" id="pg-backup">
+  <div class="topbar">
+    <div><div class="tb-title"><i class="ti ti-cloud-upload"></i> بکاپ و بازیابی</div><div class="tb-sub">انتقال کامل کانفیگ‌ها، مصرف‌ها و گروه‌های ساب با همان شناسه‌ها</div></div>
+    <div class="tb-right"><button class="btn btn-o" onclick="navTo('migration')"><i class="ti ti-book-2"></i> آموزش انتقال</button><span class="badge bg-blue" id="backup-ready">در حال بررسی...</span></div>
+  </div>
+  <div class="create-panel">
+    <div class="cp-head">
+      <div class="cp-head-icon"><i class="ti ti-brand-telegram"></i></div>
+      <div class="cp-head-text"><div class="cp-head-title">تنظیم اتصال تلگرام</div><div class="cp-head-sub">توکن، ادمین‌ها و مقصد بکاپ را مستقیم از پنل تنظیم کنید</div></div>
+    </div>
+    <div class="cp-body">
+      <div class="cp-row">
+        <div class="cp-block">
+          <div class="cp-block-label"><i class="ti ti-key"></i> توکن ربات BotFather</div>
+          <input class="cp-input-full" id="tg-token" type="password" autocomplete="new-password" placeholder="توکن جدید را وارد کنید">
+          <div style="font-size:9.5px;color:var(--t3);margin-top:7px" id="tg-token-state">هنوز تنظیم نشده</div>
+        </div>
+        <div class="cp-block">
+          <div class="cp-block-label"><i class="ti ti-users"></i> آیدی عددی ادمین‌ها</div>
+          <input class="cp-input-full" id="tg-admins" placeholder="123456789,987654321" dir="ltr">
+          <div style="font-size:9.5px;color:var(--t3);margin-top:7px">چند آیدی را با کاما جدا کنید</div>
+        </div>
+      </div>
+      <div class="cp-row">
+        <div class="cp-block">
+          <div class="cp-block-label"><i class="ti ti-message-2"></i> چت مقصد بکاپ</div>
+          <input class="cp-input-full" id="tg-chat" placeholder="مثلاً -1001234567890 یا آیدی شخصی" dir="ltr">
+          <div style="font-size:9.5px;color:var(--t3);margin-top:7px">ربات باید اجازه ارسال فایل و Pin داشته باشد</div>
+        </div>
+        <div class="cp-block">
+          <div class="cp-block-label"><i class="ti ti-clock"></i> فاصله بکاپ دوره‌ای</div>
+          <div style="display:flex;align-items:center;gap:8px"><input class="cp-input-full" id="tg-interval" type="number" min="0.25" step="0.25" value="6"><span style="color:var(--t3);font-size:11px">ساعت</span></div>
+          <label style="display:flex;align-items:center;gap:8px;margin-top:12px;color:var(--t2);font-size:11px;cursor:pointer"><input type="checkbox" id="tg-auto-restore" checked style="accent-color:var(--accent)"> بازیابی خودکار روی پنل خالی</label>
+        </div>
+      </div>
+      <div class="cp-footer">
+        <div class="cp-footer-note"><i class="ti ti-shield-lock"></i> توکن در فایل خصوصی داخل DATA_DIR ذخیره می‌شود و در API یا صفحه دوباره نمایش داده نمی‌شود.</div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <button class="btn btn-o" onclick="testTelegramConnection()"><i class="ti ti-plug-connected"></i> تست اتصال</button>
+          <button class="cp-submit-btn" onclick="saveTelegramSettings()"><i class="ti ti-device-floppy"></i> ذخیره تنظیمات</button>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="g2">
+    <div class="srv-panel">
+      <div class="srv-hero">
+        <div class="srv-hero-icon"><i class="ti ti-brand-telegram"></i></div>
+        <div class="srv-hero-text"><div class="srv-hero-domain">بکاپ امن در تلگرام</div><div class="srv-hero-sub">آخرین بکاپ پین می‌شود تا پنل جدید بتواند خودکار آن را پیدا کند</div></div>
+      </div>
+      <div style="padding:20px 22px 22px">
+        <div class="sr"><span class="sr-k"><i class="ti ti-link"></i> کانفیگ‌ها</span><span class="sr-v" id="backup-links">—</span></div>
+        <div class="sr"><span class="sr-k"><i class="ti ti-folders"></i> گروه‌های ساب</span><span class="sr-v" id="backup-subs">—</span></div>
+        <div class="sr"><span class="sr-k"><i class="ti ti-clock"></i> فاصله بکاپ خودکار</span><span class="sr-v" id="backup-interval">—</span></div>
+        <div class="sr"><span class="sr-k"><i class="ti ti-activity"></i> آخرین نتیجه</span><span class="sr-v" id="backup-last">—</span></div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:18px">
+          <button class="btn btn-p" id="backup-tg-btn" onclick="sendTelegramBackup()"><i class="ti ti-brand-telegram"></i> ارسال بکاپ الان</button>
+          <button class="btn btn-o" onclick="location.href='/api/backup/download'"><i class="ti ti-download"></i> دانلود فایل</button>
+        </div>
+      </div>
+    </div>
+    <div class="pw-panel">
+      <div class="pw-hero">
+        <div class="pw-hero-icon"><i class="ti ti-restore"></i></div>
+        <div class="pw-hero-text"><div class="pw-hero-title">بازیابی روی پنل جدید</div><div class="pw-hero-sub">UUID کانفیگ‌ها و کلید گروه‌ها بدون تغییر بازیابی می‌شوند</div></div>
+      </div>
+      <div class="pw-body">
+        <div class="cl amber" style="margin-top:0;margin-bottom:15px"><i class="ti ti-alert-triangle"></i><span>بازیابی، اطلاعات فعلی پنل را جایگزین می‌کند. قبل از ادامه از وضعیت فعلی بکاپ بگیرید.</span></div>
+        <button class="pw-submit" onclick="restoreTelegramBackup()"><i class="ti ti-brand-telegram"></i> بازیابی آخرین بکاپ تلگرام</button>
+        <div style="display:flex;align-items:center;gap:10px;margin:16px 0;color:var(--t3);font-size:10px"><span style="height:1px;background:var(--card-b);flex:1"></span> یا فایل JSON <span style="height:1px;background:var(--card-b);flex:1"></span></div>
+        <input type="file" id="backup-file" accept="application/json,.json" class="cp-input-full" style="margin-bottom:10px">
+        <button class="btn btn-o" style="width:100%;justify-content:center" onclick="restoreBackupFile()"><i class="ti ti-upload"></i> بازیابی فایل انتخاب‌شده</button>
+      </div>
+    </div>
+  </div>
+  <div class="card mb16">
+    <div class="card-title"><i class="ti ti-world"></i> دامنه‌های پنل جدید</div>
+    <div class="cl" style="margin-top:0"><i class="ti ti-info-circle"></i><span>بعد از Restore فقط این دو کادر را پر کن. تغییرات همان لحظه داخل پنل فعال و در Volume ذخیره می‌شوند؛ نیازی به بازکردن Variables برای کارکرد پنل نیست.</span></div>
+    <div class="form-row" style="margin-top:16px">
+      <div class="fg" style="flex:1;min-width:240px"><label>۱ — دامنه ثابت لینک ساب‌ها</label><input class="fi" id="stable-domain-input" dir="ltr" placeholder="https://ping101.kdns.fr" style="width:100%"></div>
+      <div class="fg" style="flex:1;min-width:240px"><label>۲ — دامنه Railway داخل کانفیگ‌ها</label><input class="fi" id="config-domain-input" dir="ltr" placeholder="new-panel.up.railway.app" style="width:100%"></div>
+    </div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:14px">
+      <button class="btn btn-p" onclick="saveDomainSettings()"><i class="ti ti-device-floppy"></i> ذخیره و فعال‌سازی فوری</button>
+      <button class="btn btn-g" onclick="registerCurrentDomain()"><i class="ti ti-current-location"></i> دامنه فعلی = دامنه ساب</button>
+    </div>
+    <div class="sr" style="margin-top:10px"><span class="sr-k"><i class="ti ti-rss"></i> دامنه ثابت لینک ساب</span><span class="sr-v" id="backup-domain">تنظیم نشده</span></div>
+    <div class="sr"><span class="sr-k"><i class="ti ti-server"></i> دامنه اتصال داخل کانفیگ‌ها</span><span class="sr-v" id="config-domain">دامنه Railway</span></div>
+    <div class="cl amber" id="railway-domain-warning" style="display:none"><i class="ti ti-alert-triangle"></i><span>برای لینک ساب بهتر است دامنه اختصاصی ثابت باشد؛ دامنه موقت Railway قابل انتقال تضمینی نیست.</span></div>
+    <div class="cl amber"><i class="ti ti-shield-off"></i><span><b>اگر ساب بدون VPN آپدیت نمی‌شود:</b> در DNS/Cloudflare رکورد دامنه ساب را روی DNS only (ابر خاکستری) بگذار و Proxy را خاموش کن. همچنین دکمه «ساب Railway» کنار هر گروه، لینک مستقیم اضطراری بدون دامنه ثابت را می‌دهد.</span></div>
+  </div>
+
+  <div class="create-panel">
+    <div class="cp-head">
+      <div class="cp-head-icon"><i class="ti ti-brand-railway"></i></div>
+      <div class="cp-head-text"><div class="cp-head-title">همگام‌سازی خودکار با Railway Variables</div><div class="cp-head-sub">اختیاری — دو متغیر دامنه را با API رسمی Railway ثبت و سرویس را Redeploy می‌کند</div></div>
+    </div>
+    <div class="cp-body">
+      <div class="cp-block mb16">
+        <div class="cp-block-label"><i class="ti ti-link"></i> لینک صفحه Variables همین سرویس</div>
+        <input class="cp-input-full" id="rw-dashboard-url" dir="ltr" placeholder="https://railway.com/project/.../service/.../variables?environmentId=...">
+        <div style="font-size:9.5px;color:var(--t3);margin-top:7px">همان لینکی که از نوار آدرس صفحه Variables کپی می‌کنی؛ شناسه‌ها خودکار از آن خوانده می‌شوند.</div>
+      </div>
+      <div class="cp-row">
+        <div class="cp-block">
+          <div class="cp-block-label"><i class="ti ti-key"></i> Railway API Token</div>
+          <input class="cp-input-full" id="rw-api-token" type="password" autocomplete="new-password" placeholder="توکن را فقط اینجا وارد کن">
+          <div style="font-size:9.5px;color:var(--t3);margin-top:7px" id="rw-token-state">توکن تنظیم نشده</div>
+          <a href="https://railway.com/account/tokens" target="_blank" style="display:inline-flex;align-items:center;gap:4px;color:var(--accent2);font-size:10px;margin-top:8px"><i class="ti ti-external-link"></i> ساخت Account Token در Railway</a>
+        </div>
+        <div class="cp-block">
+          <div class="cp-block-label"><i class="ti ti-shield-lock"></i> نوع توکن</div>
+          <select class="cp-input-full fs" id="rw-token-type">
+            <option value="account">Account Token</option>
+            <option value="project">Project Token</option>
+          </select>
+          <div style="font-size:9.5px;color:var(--t3);margin-top:7px">توکن در فایل خصوصی /data ذخیره و داخل بکاپ تلگرام فرستاده نمی‌شود.</div>
+        </div>
+      </div>
+      <div class="cp-footer">
+        <div class="cp-footer-note"><i class="ti ti-info-circle"></i> اول تنظیمات اتصال را ذخیره و تست کن؛ سپس دکمه همگام‌سازی را بزن. Railway پس از ثبت Variables یک Deploy جدید شروع می‌کند.</div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <button class="btn btn-o" onclick="saveRailwayConnection()"><i class="ti ti-device-floppy"></i> ذخیره اتصال</button>
+          <button class="btn btn-o" onclick="testRailwayConnection()"><i class="ti ti-plug-connected"></i> تست API</button>
+          <button class="cp-submit-btn" onclick="syncRailwayVariables()"><i class="ti ti-refresh"></i> ثبت دامنه‌ها در Variables</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
 <section class="pg" id="pg-settings">
   <div class="topbar"><div><div class="tb-title"><i class="ti ti-settings"></i> تنظیمات</div></div></div>
   <div class="g2">
@@ -1369,11 +1612,24 @@ function setSpeedLimit(n,el){
   document.querySelectorAll('#speed-chips .chip').forEach(c=>c.classList.remove('active'));
   el.classList.add('active');
 }
-function onAlpnPresetChange(){
-  const p=document.getElementById('nl-alpn-preset').value;
-  const inp=document.getElementById('nl-alpn');
-  if(p==='__custom__'){inp.style.display='block';inp.value='';inp.focus();}
-  else{inp.style.display='none';inp.value=p;}
+const ALPN_ORDER=['h3','h2','http/1.1'];
+function setAlpnValue(scope,value){
+  const selected=new Set(String(value||'').split(',').map(x=>x.trim()).filter(x=>ALPN_ORDER.includes(x)));
+  document.querySelectorAll('#'+scope+'-alpn-selector .alpn-opt').forEach(btn=>btn.classList.toggle('active',selected.has(btn.dataset.value)));
+  const canonical=ALPN_ORDER.filter(x=>selected.has(x)).join(',');
+  document.getElementById(scope+'-alpn').value=canonical;
+  const info=document.getElementById(scope+'-alpn-effective');
+  if(info)info.textContent=canonical?'انتخاب ذخیره‌شده: '+canonical+' · خروجی ناسازگار به‌صورت خودکار امن می‌شود.':'حالت خودکار: WS = http/1.1 و XHTTP = h2,http/1.1';
+}
+function toggleAlpnOption(scope,btn){
+  btn.classList.toggle('active');
+  const values=[...document.querySelectorAll('#'+scope+'-alpn-selector .alpn-opt.active')].map(x=>x.dataset.value);
+  setAlpnValue(scope,values.join(','));
+  if(scope==='nl')document.querySelectorAll('#nl-alpn-selector').forEach(box=>box.closest('.cp-block').querySelectorAll('.chip').forEach(c=>c.classList.remove('active')));
+}
+function setAlpnProfile(scope,value,el){
+  setAlpnValue(scope,value);
+  if(el){el.closest('.chip-row').querySelectorAll('.chip').forEach(c=>c.classList.remove('active'));el.classList.add('active')}
 }
 const sb=document.getElementById('sb'),overlay=document.getElementById('overlay');
 function openSb(){sb.classList.add('open');overlay.classList.add('show')}
@@ -1384,7 +1640,7 @@ overlay.addEventListener('click',closeSb);
 function navTo(name){
   document.querySelectorAll('.nav-it').forEach(n=>n.classList.toggle('on',n.dataset.pg===name));
   document.querySelectorAll('.pg').forEach(p=>p.classList.toggle('on',p.id==='pg-'+name));
-  const loaders={links:loadLinks,connections:loadConns,errors:loadErrs,subscriptions:loadSubsPage,subgroups:loadSubs,logs:loadActivity};
+  const loaders={links:loadLinks,connections:loadConns,errors:loadErrs,subscriptions:loadSubsPage,subgroups:loadSubs,logs:loadActivity,backup:loadBackupStatus};
   if(loaders[name])loaders[name]();
   closeSb();window.scrollTo({top:0,behavior:'smooth'});
 }
@@ -1423,6 +1679,145 @@ function renderErrs(errs){
   const el=document.getElementById('errs-full');if(!el)return;
   if(!errs.length){el.innerHTML='<div style="color:var(--green-t);padding:10px;font-size:12px;display:flex;align-items:center;gap:5px"><i class="ti ti-circle-check"></i> هیچ خطایی نیست</div>';return}
   el.innerHTML=errs.slice().reverse().map(e=>`<div class="erow"><div class="etime"><i class="ti ti-clock"></i>${new Date(e.time).toLocaleString('fa-IR')}</div><div class="emsg">${esc(e.error)}${e.url?' — '+esc(e.url):''}</div></div>`).join('');
+}
+async function loadBackupStatus(){
+  try{
+    const [r,tr,dr,rr]=await Promise.all([authF('/api/backup/status'),authF('/api/telegram/settings'),authF('/api/domain/settings'),authF('/api/railway/settings')]);
+    const d=await r.json(),tg=await tr.json(),domain=await dr.json(),rw=await rr.json();
+    const ready=document.getElementById('backup-ready');
+    ready.textContent=d.telegram_ready?'تلگرام آماده است':'نیاز به تنظیم تلگرام';
+    ready.className='badge '+(d.telegram_ready?'bg-green':'bg-amber');
+    document.getElementById('backup-links').textContent=toFa(d.links)+' مورد';
+    document.getElementById('backup-subs').textContent=toFa(d.subs)+' گروه';
+    document.getElementById('backup-interval').textContent=toFa(d.interval_hours)+' ساعت';
+    const last=d.last_result||{};
+    document.getElementById('backup-last').textContent=last.at?(last.message+' · '+new Date(last.at).toLocaleString('fa-IR')):last.message||'—';
+    document.getElementById('backup-domain').textContent=domain.public_base_url||'تنظیم نشده — لینک قدیمی با تغییر دامنه حفظ نمی‌شود';
+    document.getElementById('config-domain').textContent=domain.config_host||'دامنه Railway قابل تشخیص نیست';
+    document.getElementById('stable-domain-input').value=domain.public_base_url||domain.current_url||'';
+    document.getElementById('config-domain-input').value=domain.config_host||'';
+    document.getElementById('railway-domain-warning').style.display=domain.is_temporary_railway?'flex':'none';
+    document.getElementById('rw-dashboard-url').value=rw.dashboard_url||'';
+    document.getElementById('rw-api-token').value='';
+    document.getElementById('rw-api-token').placeholder=rw.token_configured?'برای حفظ توکن فعلی خالی بگذارید':'توکن را فقط اینجا وارد کن';
+    document.getElementById('rw-token-state').textContent=rw.token_configured?'توکن فعال: '+rw.token_masked:'توکن تنظیم نشده';
+    document.getElementById('rw-token-type').value=rw.token_type||'account';
+    document.getElementById('backup-tg-btn').disabled=!d.telegram_ready;
+    document.getElementById('tg-token').value='';
+    document.getElementById('tg-token').placeholder=tg.token_configured?'برای حفظ توکن فعلی خالی بگذارید':'توکن جدید را وارد کنید';
+    document.getElementById('tg-token-state').textContent=tg.token_configured?'توکن فعال: '+tg.token_masked:'هنوز توکنی تنظیم نشده';
+    document.getElementById('tg-admins').value=tg.admin_ids||'';
+    document.getElementById('tg-chat').value=tg.backup_chat_id||'';
+    document.getElementById('tg-interval').value=tg.interval_hours||6;
+    document.getElementById('tg-auto-restore').checked=!!tg.auto_restore;
+  }catch(e){console.error(e)}
+}
+async function saveDomainSettings(){
+  const public_base_url=document.getElementById('stable-domain-input').value.trim();
+  const config_public_host=document.getElementById('config-domain-input').value.trim();
+  if(!public_base_url||!config_public_host){toast('هر دو دامنه را وارد کن','err');return false}
+  try{
+    const r=await authF('/api/domain/settings',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({public_base_url,config_public_host})}),d=await r.json().catch(()=>({}));
+    if(!r.ok)throw new Error(d.detail||'ثبت دامنه‌ها ناموفق بود');
+    toast('هر دو دامنه ذخیره و فوری فعال شدند ✓','ok');
+    await loadBackupStatus();loadLinks();loadSubs();return true;
+  }catch(e){toast(e.message,'err');return false}
+}
+async function registerCurrentDomain(){
+  if(!confirm('دامنه‌ای که الان پنل با آن باز شده به‌عنوان دامنه ثابت همه لینک‌های ساب ثبت شود؟'))return;
+  try{
+    const r=await authF('/api/domain/register-current',{method:'POST'}),d=await r.json().catch(()=>({}));
+    if(!r.ok)throw new Error(d.detail||'ثبت دامنه ناموفق بود');
+    toast('دامنه فعلی ثبت شد؛ حالا یک بکاپ جدید بگیرید ✓','ok');
+    await loadBackupStatus();loadLinks();loadSubs();
+  }catch(e){toast(e.message,'err')}
+}
+async function saveRailwayConnection(){
+  const body={
+    dashboard_url:document.getElementById('rw-dashboard-url').value.trim(),
+    api_token:document.getElementById('rw-api-token').value.trim(),
+    token_type:document.getElementById('rw-token-type').value
+  };
+  try{
+    const r=await authF('/api/railway/settings',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)}),d=await r.json().catch(()=>({}));
+    if(!r.ok)throw new Error(d.detail||'ذخیره اتصال Railway ناموفق بود');
+    toast('اتصال Railway ذخیره شد ✓','ok');await loadBackupStatus();return true;
+  }catch(e){toast(e.message,'err');return false}
+}
+async function testRailwayConnection(){
+  const saved=await saveRailwayConnection();if(!saved)return;
+  try{
+    const r=await authF('/api/railway/test',{method:'POST'}),d=await r.json().catch(()=>({}));
+    if(!r.ok)throw new Error(d.detail||'اتصال Railway ناموفق بود');
+    toast('اتصال API Railway موفق بود ✓','ok');
+  }catch(e){toast(e.message,'err')}
+}
+async function syncRailwayVariables(){
+  const pendingPublic=document.getElementById('stable-domain-input').value.trim();
+  const pendingConfig=document.getElementById('config-domain-input').value.trim();
+  const connectionSaved=await saveRailwayConnection();if(!connectionSaved)return;
+  document.getElementById('stable-domain-input').value=pendingPublic;
+  document.getElementById('config-domain-input').value=pendingConfig;
+  const domainsSaved=await saveDomainSettings();if(!domainsSaved)return;
+  if(!confirm('دو متغیر دامنه در Railway ثبت شوند؟ این کار یک Deploy جدید شروع می‌کند.'))return;
+  try{
+    const r=await authF('/api/railway/sync-variables',{method:'POST'}),d=await r.json().catch(()=>({}));
+    if(!r.ok)throw new Error(d.detail||'ثبت Variables ناموفق بود');
+    toast('Variables ثبت شد؛ Railway در حال Deploy است ✓','ok');
+  }catch(e){toast(e.message,'err')}
+}
+async function saveTelegramSettings(){
+  const body={
+    bot_token:document.getElementById('tg-token').value.trim(),
+    admin_ids:document.getElementById('tg-admins').value.trim(),
+    backup_chat_id:document.getElementById('tg-chat').value.trim(),
+    interval_hours:Number(document.getElementById('tg-interval').value)||6,
+    auto_restore:document.getElementById('tg-auto-restore').checked
+  };
+  try{
+    const r=await authF('/api/telegram/settings',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)}),d=await r.json().catch(()=>({}));
+    if(!r.ok)throw new Error(d.detail||'ذخیره تنظیمات ناموفق بود');
+    toast('تنظیمات تلگرام ذخیره و ربات راه‌اندازی شد ✓','ok');
+    await loadBackupStatus();
+  }catch(e){toast(e.message,'err')}
+}
+async function testTelegramConnection(){
+  try{
+    const token=document.getElementById('tg-token').value.trim();
+    const r=await authF('/api/telegram/test',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({bot_token:token})}),d=await r.json().catch(()=>({}));
+    if(!r.ok)throw new Error(d.detail||'اتصال ناموفق بود');
+    toast('اتصال موفق به @'+d.username+' ✓','ok');
+  }catch(e){toast(e.message,'err')}
+}
+async function sendTelegramBackup(){
+  const btn=document.getElementById('backup-tg-btn'),old=btn.innerHTML;
+  btn.disabled=true;btn.innerHTML='<i class="ti ti-loader-2" style="animation:spin 1s linear infinite"></i> در حال ارسال...';
+  try{
+    const r=await authF('/api/backup/telegram',{method:'POST'}),d=await r.json().catch(()=>({}));
+    if(!r.ok)throw new Error(d.detail||'ارسال ناموفق بود');
+    toast('بکاپ کامل به تلگرام ارسال شد ✓','ok');await loadBackupStatus();
+  }catch(e){toast(e.message,'err')}
+  finally{btn.disabled=false;btn.innerHTML=old}
+}
+async function restoreTelegramBackup(){
+  if(!confirm('تمام اطلاعات فعلی با آخرین بکاپ تلگرام جایگزین شود؟'))return;
+  try{
+    const r=await authF('/api/backup/restore-telegram',{method:'POST'}),d=await r.json().catch(()=>({}));
+    if(!r.ok)throw new Error(d.detail||'بازیابی ناموفق بود');
+    toast(`بازیابی شد: ${toFa(d.links)} کانفیگ و ${toFa(d.subs)} گروه`,'ok');
+    await Promise.all([loadBackupStatus(),loadLinks(),loadSubs()]);
+  }catch(e){toast(e.message,'err')}
+}
+async function restoreBackupFile(){
+  const file=document.getElementById('backup-file').files[0];
+  if(!file){toast('یک فایل JSON انتخاب کنید','err');return}
+  if(!confirm('تمام اطلاعات فعلی با این فایل جایگزین شود؟'))return;
+  try{
+    const r=await authF('/api/backup/restore',{method:'POST',headers:{'Content-Type':'application/json'},body:await file.text()}),d=await r.json().catch(()=>({}));
+    if(!r.ok)throw new Error(d.detail||'فایل معتبر نیست');
+    toast(`بازیابی شد: ${toFa(d.links)} کانفیگ و ${toFa(d.subs)} گروه`,'ok');
+    await Promise.all([loadBackupStatus(),loadLinks(),loadSubs()]);
+  }catch(e){toast(e.message,'err')}
 }
 async function loadActivity(){
   try{
@@ -1488,6 +1883,7 @@ async function loadLinks(){
         ${protoBadge(l.protocol)}
         <span class="cfg-sub-tag" title="پورت اتصال"><i class="ti ti-route"></i> :${l.port||443}</span>
         <span class="cfg-sub-tag" title="Fingerprint"><i class="ti ti-fingerprint"></i> ${esc(l.fingerprint||'chrome')}</span>
+        <span class="cfg-sub-tag" title="ALPN مؤثر در خروجی"><i class="ti ti-antenna-bars-5"></i> ${esc(l.effective_alpn||'خودکار')}</span>
         <span class="cfg-sub-tag" title="آی‌پی‌های متصل / محدودیت"><i class="ti ti-users"></i> ${l.connected_ips||0}${l.ip_limit?('/'+l.ip_limit):' (∞)'}</span>
         <span class="cfg-sub-tag" title="محدودیت سرعت"><i class="ti ti-gauge"></i> ${l.speed_limit_bytes?((l.speed_limit_bytes*8/1024/1024).toFixed(1)+' Mbps'):'نامحدود'}</span>
         ${l.sub_id&&allSubsList.find(s=>s.sub_id===l.sub_id)?`<span class="cfg-sub-tag"><i class="ti ti-folder"></i> ${esc(allSubsList.find(s=>s.sub_id===l.sub_id).name)}</span>`:''}
@@ -1496,7 +1892,8 @@ async function loadLinks(){
       <div class="cfg-actions">
         <button class="tog${allowed?' on':''}" onclick="toggleActive('${l.uuid}',${!l.active})" title="فعال/غیرفعال"></button>
         <button class="btn btn-sm btn-g btn-icon" onclick="navigator.clipboard.writeText('${esc(l.vless_link)}').then(()=>toast('لینک کپی شد','ok'))" title="کپی لینک"><i class="ti ti-copy"></i></button>
-        <button class="btn btn-sm btn-g btn-icon" onclick="navigator.clipboard.writeText('${esc(l.sub_url)}').then(()=>toast('Sub کپی شد','ok'))" title="Sub URL"><i class="ti ti-rss"></i></button>
+        <button class="btn btn-sm btn-g btn-icon" onclick="navigator.clipboard.writeText('${esc(l.sub_url)}').then(()=>toast('ساب ثابت کپی شد','ok'))" title="ساب ثابت"><i class="ti ti-rss"></i></button>
+        ${l.direct_sub_url&&l.direct_sub_url!==l.sub_url?`<button class="btn btn-sm btn-amber btn-icon" onclick="navigator.clipboard.writeText('${esc(l.direct_sub_url)}').then(()=>toast('ساب Railway کپی شد','ok'))" title="ساب مستقیم Railway"><i class="ti ti-server"></i></button>`:''}
         <button class="btn btn-sm btn-g btn-icon" onclick="showQR('${esc(l.vless_link)}')" title="QR"><i class="ti ti-qrcode"></i></button>
         <button class="btn btn-sm btn-amber btn-icon" onclick="openEditLink('${l.uuid}')" title="ویرایش"><i class="ti ti-edit"></i></button>
         <button class="btn btn-sm btn-g btn-icon" onclick="resetUsage('${l.uuid}')" title="ریست مصرف"><i class="ti ti-rotate"></i></button>
@@ -1529,8 +1926,8 @@ async function createLink(){
     document.getElementById('nl-port').value='443';
     document.getElementById('nl-iplimit').value='0';
     document.getElementById('nl-speed').value='0';
-    document.getElementById('nl-alpn-preset').value='';
-    document.getElementById('nl-alpn').style.display='none';
+    setAlpnValue('nl','');
+    document.querySelectorAll('#nl-alpn-selector').forEach(box=>box.closest('.cp-block').querySelectorAll('.chip').forEach((c,i)=>c.classList.toggle('active',i===0)));
     toast('کانفیگ ساخته شد ✓','ok');loadLinks();
   }catch(e){toast('خطا در ساخت','err')}
 }
@@ -1544,7 +1941,7 @@ function openEditLink(uuid){
   else{document.getElementById('el-val').value=(l.limit_bytes/1024/1024).toFixed(0);document.getElementById('el-unit').value='MB';}
   document.getElementById('el-exp').value='';
   document.getElementById('el-fp').value=l.fingerprint||'chrome';
-  document.getElementById('el-alpn').value=l.alpn||'';
+  setAlpnValue('el',l.alpn||'');
   document.getElementById('el-port').value=l.port||443;
   document.getElementById('el-iplimit').value=l.ip_limit||0;
   if(!l.speed_limit_bytes){document.getElementById('el-speed').value='0';document.getElementById('el-speed-unit').value='MBIT';}
@@ -1578,6 +1975,14 @@ async function toggleActive(uuid,newState){
 }
 async function resetUsage(uuid){
   try{const r=await authF('/api/links/'+uuid,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({reset_usage:true})});if(!r.ok)throw new Error();toast('مصرف ریست شد ✓','ok');loadLinks();}catch(e){toast('خطا','err')}
+}
+async function unlimitAllSpeeds(){
+  if(!confirm('محدودیت سرعت همه کانفیگ‌ها برداشته شود؟'))return;
+  try{
+    const r=await authF('/api/links/actions/unlimit-all',{method:'POST'}),d=await r.json().catch(()=>({}));
+    if(!r.ok)throw new Error(d.detail||'خطا');
+    toast('سرعت '+toFa(d.changed)+' کانفیگ نامحدود شد ✓','ok');loadLinks();
+  }catch(e){toast(e.message,'err')}
 }
 async function deleteLink(uuid){
   if(!confirm('حذف این کانفیگ؟'))return;
@@ -1627,7 +2032,8 @@ function renderSubsGrid(subs){
       </div>
       <div class="sub-card-bottom">
         <button class="btn btn-sm btn-g" onclick="openSubLinks('${esc(s.sub_id)}','${esc(s.name)}')"><i class="ti ti-link-plus"></i> کانفیگ‌ها</button>
-        <button class="btn btn-sm btn-o" onclick="navigator.clipboard.writeText('${esc(s.sub_url)}').then(()=>toast('لینک ساب کپی شد','ok'))"><i class="ti ti-rss"></i> ساب</button>
+        <button class="btn btn-sm btn-o" onclick="navigator.clipboard.writeText('${esc(s.sub_url)}').then(()=>toast('لینک ساب ثابت کپی شد','ok'))"><i class="ti ti-rss"></i> ساب ثابت</button>
+        ${s.direct_sub_url&&s.direct_sub_url!==s.sub_url?`<button class="btn btn-sm btn-amber" onclick="navigator.clipboard.writeText('${esc(s.direct_sub_url)}').then(()=>toast('ساب مستقیم Railway کپی شد','ok'))" title="برای زمانی که دامنه ثابت بدون VPN باز نمی‌شود"><i class="ti ti-server"></i> ساب Railway</button>`:''}
         <button class="btn btn-sm btn-g btn-icon" onclick="showQR('${esc(s.sub_url)}')" title="QR"><i class="ti ti-qrcode"></i></button>
         <button class="btn btn-sm btn-d btn-icon" onclick="deleteSub('${esc(s.sub_id)}')" title="حذف"><i class="ti ti-trash"></i></button>
       </div>
@@ -1738,7 +2144,8 @@ async function loadSubsPage(){
           <div style="font-size:10px;color:var(--t3);margin-top:3px">${toFa(s.links_count)} کانفیگ · ${esc(s.total_used_fmt)} مصرف ${s.has_password?'· 🔒 رمزدار':''}</div>
         </div>
         <div style="display:flex;gap:5px;flex-wrap:wrap">
-          <button class="btn btn-sm btn-pur" onclick="navigator.clipboard.writeText('${esc(s.sub_url)}').then(()=>toast('کپی شد','ok'))"><i class="ti ti-copy"></i> ساب</button>
+          <button class="btn btn-sm btn-pur" onclick="navigator.clipboard.writeText('${esc(s.sub_url)}').then(()=>toast('کپی شد','ok'))"><i class="ti ti-copy"></i> ساب ثابت</button>
+          ${s.direct_sub_url&&s.direct_sub_url!==s.sub_url?`<button class="btn btn-sm btn-amber" onclick="navigator.clipboard.writeText('${esc(s.direct_sub_url)}').then(()=>toast('ساب Railway کپی شد','ok'))"><i class="ti ti-server"></i> مستقیم Railway</button>`:''}
           <button class="btn btn-sm btn-pur" onclick="navigator.clipboard.writeText('${esc(s.public_url)}').then(()=>toast('کپی شد','ok'))"><i class="ti ti-globe"></i> پابلیک</button>
           <button class="btn btn-sm btn-g" onclick="showQR('${esc(s.sub_url)}')"><i class="ti ti-qrcode"></i></button>
         </div>
