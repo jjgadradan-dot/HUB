@@ -31,6 +31,7 @@ DATA_DIR = Path(os.environ.get("DATA_DIR", "/data"))
 DATA_FILE = DATA_DIR / "x4g_state.json"
 SECRET_FILE = DATA_DIR / "x4g_secret.key"
 TELEGRAM_SETTINGS_FILE = DATA_DIR / "telegram_settings.json"
+APP_SETTINGS_FILE = DATA_DIR / "app_settings.json"
 SAVE_LOCK = asyncio.Lock()
 BACKUP_FORMAT = "x4g-telegram-backup"
 BACKUP_VERSION = 1
@@ -67,6 +68,38 @@ def _apply_telegram_settings(settings: dict):
 
 TELEGRAM_SETTINGS = _load_telegram_settings()
 _apply_telegram_settings(TELEGRAM_SETTINGS)
+
+def _load_app_settings() -> dict:
+    try:
+        if APP_SETTINGS_FILE.exists():
+            data = json.loads(APP_SETTINGS_FILE.read_text(encoding="utf-8"))
+            return data if isinstance(data, dict) else {}
+    except Exception as exc:
+        logger.warning(f"Could not load app settings: {exc}")
+    return {}
+
+def _save_app_settings(settings: dict):
+    DATA_DIR.mkdir(parents=True, exist_ok=True)
+    tmp = APP_SETTINGS_FILE.with_suffix(".tmp")
+    tmp.write_text(json.dumps(settings, ensure_ascii=False, indent=2), encoding="utf-8")
+    tmp.replace(APP_SETTINGS_FILE)
+
+def _normalise_public_base_url(value: str) -> str:
+    value = (value or "").strip().rstrip("/")
+    if not value:
+        return ""
+    parsed = urlparse(value if "://" in value else f"https://{value}")
+    if parsed.scheme not in {"http", "https"} or not parsed.netloc or not parsed.hostname:
+        raise ValueError("دامنه معتبر نیست")
+    # مسیر در دامنه پایه مجاز نیست، چون URLهای ساب باید از ریشه ثابت بمانند.
+    if parsed.path not in {"", "/"} or parsed.query or parsed.fragment:
+        raise ValueError("دامنه پایه نباید مسیر یا query داشته باشد")
+    port = f":{parsed.port}" if parsed.port else ""
+    return f"{parsed.scheme}://{parsed.hostname}{port}"
+
+APP_SETTINGS = _load_app_settings()
+if APP_SETTINGS.get("public_base_url"):
+    os.environ["PUBLIC_BASE_URL"] = str(APP_SETTINGS["public_base_url"])
 
 def _env_bool(name: str, default: bool = False) -> bool:
     value = os.environ.get(name)
@@ -198,28 +231,33 @@ async def build_backup_payload() -> dict:
         },
         # برای معتبر ماندن رمز پنل و رمز گروه‌ها بعد از مهاجرت لازم است.
         "security": {"secret": CONFIG["secret"]},
+        # دامنه ثابت همراه بکاپ منتقل می‌شود تا مسیر ساب مشتری عوض نشود.
+        "settings": {"public_base_url": os.environ.get("PUBLIC_BASE_URL", "")},
     }
 
-def _normalise_backup_payload(payload: dict) -> tuple[dict, str | None]:
+def _normalise_backup_payload(payload: dict) -> tuple[dict, str | None, dict]:
     if not isinstance(payload, dict):
         raise ValueError("فایل بکاپ معتبر نیست")
     if payload.get("format") == BACKUP_FORMAT:
         state = payload.get("state")
         secret = (payload.get("security") or {}).get("secret")
+        settings = payload.get("settings") or {}
     elif "links" in payload and "subs" in payload:  # سازگاری با x4g_state.json قدیمی
         state = payload
         secret = None
+        settings = {}
     else:
         raise ValueError("فرمت فایل بکاپ شناخته نشد")
     if not isinstance(state, dict) or not isinstance(state.get("links"), dict) or not isinstance(state.get("subs"), dict):
         raise ValueError("ساختار links/subs در بکاپ خراب است")
     if len(state["links"]) > 100000 or len(state["subs"]) > 100000:
         raise ValueError("تعداد رکوردهای بکاپ غیرعادی است")
-    return state, secret if isinstance(secret, str) and secret else None
+    return state, secret if isinstance(secret, str) and secret else None, settings if isinstance(settings, dict) else {}
 
 async def restore_backup_payload(payload: dict, source: str = "manual") -> dict:
     """Restore اتمیک اطلاعات؛ UUID و uuid_key گروه‌ها را عیناً حفظ می‌کند."""
-    state, restored_secret = _normalise_backup_payload(payload)
+    global APP_SETTINGS
+    state, restored_secret, restored_settings = _normalise_backup_payload(payload)
     links = deepcopy(state["links"])
     subs = deepcopy(state["subs"])
 
@@ -251,6 +289,17 @@ async def restore_backup_payload(payload: dict, source: str = "manual") -> dict:
             SECRET_FILE.write_text(restored_secret, encoding="utf-8")
         except Exception as exc:
             logger.warning(f"Could not persist restored secret: {exc}")
+    restored_domain = restored_settings.get("public_base_url")
+    if restored_domain:
+        try:
+            restored_domain = _normalise_public_base_url(str(restored_domain))
+            APP_SETTINGS = {**APP_SETTINGS, "public_base_url": restored_domain}
+            _save_app_settings(APP_SETTINGS)
+            os.environ["PUBLIC_BASE_URL"] = restored_domain
+            CONFIG["host"] = urlparse(restored_domain).hostname or CONFIG["host"]
+        except ValueError as exc:
+            logger.warning(f"Ignored invalid restored public domain: {exc}")
+
     password_hash = state.get("password_hash")
     if isinstance(password_hash, str) and password_hash:
         AUTH["password_hash"] = password_hash
@@ -941,6 +990,54 @@ async def backup_status(_=Depends(require_auth)):
         "links": len(LINKS),
         "subs": len(SUBS),
     }
+
+@app.get("/api/domain/settings")
+async def get_domain_settings(request: Request, _=Depends(require_auth)):
+    forwarded_host = request.headers.get("x-forwarded-host") or request.headers.get("host") or ""
+    forwarded_proto = request.headers.get("x-forwarded-proto") or request.url.scheme or "https"
+    current_url = _normalise_public_base_url(f"{forwarded_proto}://{forwarded_host}") if forwarded_host else ""
+    registered = os.environ.get("PUBLIC_BASE_URL", "").strip()
+    return {
+        "registered": bool(registered),
+        "public_base_url": registered,
+        "current_url": current_url,
+        "is_temporary_railway": "railway.app" in (urlparse(registered or current_url).hostname or ""),
+    }
+
+@app.put("/api/domain/settings")
+async def update_domain_settings(request: Request, _=Depends(require_auth)):
+    global APP_SETTINGS
+    body = await request.json()
+    try:
+        public_url = _normalise_public_base_url(str(body.get("public_base_url") or ""))
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    APP_SETTINGS = {**APP_SETTINGS, "public_base_url": public_url}
+    _save_app_settings(APP_SETTINGS)
+    if public_url:
+        os.environ["PUBLIC_BASE_URL"] = public_url
+        CONFIG["host"] = urlparse(public_url).hostname or CONFIG["host"]
+    else:
+        os.environ.pop("PUBLIC_BASE_URL", None)
+    await save_state()  # بکاپ خودکار تنظیم دامنه را هم ثبت می‌کند.
+    log_activity("backup", f"دامنه ثابت {'ثبت شد: ' + public_url if public_url else 'پاک شد'}", "ok")
+    return {"ok": True, "public_base_url": public_url}
+
+@app.post("/api/domain/register-current")
+async def register_current_domain(request: Request, _=Depends(require_auth)):
+    forwarded_host = request.headers.get("x-forwarded-host") or request.headers.get("host")
+    forwarded_proto = request.headers.get("x-forwarded-proto") or request.url.scheme or "https"
+    if not forwarded_host:
+        raise HTTPException(status_code=400, detail="دامنه درخواست قابل تشخیص نیست")
+    public_url = _normalise_public_base_url(f"{forwarded_proto}://{forwarded_host}")
+    global APP_SETTINGS
+    APP_SETTINGS = {**APP_SETTINGS, "public_base_url": public_url}
+    _save_app_settings(APP_SETTINGS)
+    os.environ["PUBLIC_BASE_URL"] = public_url
+    CONFIG["host"] = urlparse(public_url).hostname or CONFIG["host"]
+    await save_state()
+    log_activity("backup", f"دامنه فعلی به‌عنوان دامنه ثابت ثبت شد: {public_url}", "ok")
+    return {"ok": True, "public_base_url": public_url, "is_temporary_railway": "railway.app" in (urlparse(public_url).hostname or "")}
 
 @app.get("/api/telegram/settings")
 async def get_telegram_settings(_=Depends(require_auth)):

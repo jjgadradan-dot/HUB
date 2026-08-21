@@ -1287,8 +1287,14 @@ a{color:inherit;text-decoration:none}
   </div>
   <div class="card">
     <div class="card-title"><i class="ti ti-world"></i> شرط حفظ لینک مشتری‌ها بدون تغییر</div>
-    <div class="cl" style="margin-top:0"><i class="ti ti-info-circle"></i><span>شناسه و مسیر لینک‌ها با بازیابی ثابت می‌ماند؛ اما نام دامنه بخشی از لینک مشتری است. برای اینکه مشتری هیچ لینک جدیدی نگیرد، یک دامنه اختصاصی ثابت را در <code>PUBLIC_BASE_URL</code> تنظیم و پس از جابه‌جایی DNS آن را به پنل جدید وصل کنید. دامنه موقت Railway قابل انتقال خودکار نیست.</span></div>
-    <div class="sr" style="margin-top:8px"><span class="sr-k"><i class="ti ti-world"></i> دامنه ثابت فعلی</span><span class="sr-v" id="backup-domain">تنظیم نشده</span></div>
+    <div class="cl" style="margin-top:0"><i class="ti ti-info-circle"></i><span>با ثبت دامنه، همان دامنه و مسیرهای ساب داخل بکاپ حفظ می‌شوند. بعد از انتقال پنل کافی است DNS یا Custom Domain همین دامنه را به سرویس جدید وصل کنید؛ اپ مشتری همان لینک قبلی را فقط Update می‌کند.</span></div>
+    <div class="form-row" style="margin-top:16px">
+      <div class="fg" style="flex:1;min-width:240px"><label>دامنه ثابت ساب مشتری‌ها</label><input class="fi" id="stable-domain-input" dir="ltr" placeholder="https://sub.example.com" style="width:100%"></div>
+      <button class="btn btn-p" onclick="saveStableDomain()"><i class="ti ti-device-floppy"></i> ذخیره دامنه</button>
+      <button class="btn btn-g" onclick="registerCurrentDomain()"><i class="ti ti-current-location"></i> ثبت دامنه فعلی</button>
+    </div>
+    <div class="sr" style="margin-top:10px"><span class="sr-k"><i class="ti ti-world"></i> دامنه ثبت‌شده</span><span class="sr-v" id="backup-domain">تنظیم نشده</span></div>
+    <div class="cl amber" id="railway-domain-warning" style="display:none"><i class="ti ti-alert-triangle"></i><span>این دامنه موقت Railway است. ثبت آن مسیرها را ثابت نگه می‌دارد، اما برای انتقال بدون قطعی باید Custom Domain را به سرویس جدید منتقل کنید؛ دامنه موقت Railway قابل انتقال تضمینی نیست.</span></div>
   </div>
 </section>
 <section class="pg" id="pg-settings">
@@ -1508,8 +1514,8 @@ function renderErrs(errs){
 }
 async function loadBackupStatus(){
   try{
-    const [r,tr]=await Promise.all([authF('/api/backup/status'),authF('/api/telegram/settings')]);
-    const d=await r.json(),tg=await tr.json();
+    const [r,tr,dr]=await Promise.all([authF('/api/backup/status'),authF('/api/telegram/settings'),authF('/api/domain/settings')]);
+    const d=await r.json(),tg=await tr.json(),domain=await dr.json();
     const ready=document.getElementById('backup-ready');
     ready.textContent=d.telegram_ready?'تلگرام آماده است':'نیاز به تنظیم تلگرام';
     ready.className='badge '+(d.telegram_ready?'bg-green':'bg-amber');
@@ -1518,7 +1524,9 @@ async function loadBackupStatus(){
     document.getElementById('backup-interval').textContent=toFa(d.interval_hours)+' ساعت';
     const last=d.last_result||{};
     document.getElementById('backup-last').textContent=last.at?(last.message+' · '+new Date(last.at).toLocaleString('fa-IR')):last.message||'—';
-    document.getElementById('backup-domain').textContent=d.public_base_url||'تنظیم نشده — لینک قدیمی با تغییر دامنه حفظ نمی‌شود';
+    document.getElementById('backup-domain').textContent=domain.public_base_url||'تنظیم نشده — لینک قدیمی با تغییر دامنه حفظ نمی‌شود';
+    document.getElementById('stable-domain-input').value=domain.public_base_url||domain.current_url||'';
+    document.getElementById('railway-domain-warning').style.display=domain.is_temporary_railway?'flex':'none';
     document.getElementById('backup-tg-btn').disabled=!d.telegram_ready;
     document.getElementById('tg-token').value='';
     document.getElementById('tg-token').placeholder=tg.token_configured?'برای حفظ توکن فعلی خالی بگذارید':'توکن جدید را وارد کنید';
@@ -1528,6 +1536,24 @@ async function loadBackupStatus(){
     document.getElementById('tg-interval').value=tg.interval_hours||6;
     document.getElementById('tg-auto-restore').checked=!!tg.auto_restore;
   }catch(e){console.error(e)}
+}
+async function saveStableDomain(){
+  const public_base_url=document.getElementById('stable-domain-input').value.trim();
+  try{
+    const r=await authF('/api/domain/settings',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({public_base_url})}),d=await r.json().catch(()=>({}));
+    if(!r.ok)throw new Error(d.detail||'ثبت دامنه ناموفق بود');
+    toast('دامنه ثابت ذخیره و وارد بکاپ شد ✓','ok');
+    await loadBackupStatus();loadLinks();loadSubs();
+  }catch(e){toast(e.message,'err')}
+}
+async function registerCurrentDomain(){
+  if(!confirm('دامنه‌ای که الان پنل با آن باز شده به‌عنوان دامنه ثابت همه لینک‌های ساب ثبت شود؟'))return;
+  try{
+    const r=await authF('/api/domain/register-current',{method:'POST'}),d=await r.json().catch(()=>({}));
+    if(!r.ok)throw new Error(d.detail||'ثبت دامنه ناموفق بود');
+    toast('دامنه فعلی ثبت شد؛ حالا یک بکاپ جدید بگیرید ✓','ok');
+    await loadBackupStatus();loadLinks();loadSubs();
+  }catch(e){toast(e.message,'err')}
 }
 async function saveTelegramSettings(){
   const body={
