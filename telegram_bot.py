@@ -841,10 +841,25 @@ async def start_bot():
     _poll_task = asyncio.create_task(_poll_loop())
 
 async def stop_bot():
-    global _running, _client
+    global _running, _client, _poll_task
     _running = False
     if _poll_task:
         _poll_task.cancel()
+        try:
+            await _poll_task
+        except (asyncio.CancelledError, Exception):
+            pass
+        _poll_task = None
     if _client:
         await _client.aclose()
         _client = None
+
+async def reconfigure_bot(token: str, admin_ids: str):
+    """تنظیم مجدد ربات بدون نیاز به ری‌استارت سرویس."""
+    global BOT_TOKEN, ADMIN_IDS, API_BASE
+    await stop_bot()
+    BOT_TOKEN = (token or "").strip()
+    raw = (admin_ids or "").replace(" ", "")
+    ADMIN_IDS = {int(x) for x in raw.split(",") if x.isdigit()} if raw else set()
+    API_BASE = f"https://api.telegram.org/bot{BOT_TOKEN}"
+    await start_bot()

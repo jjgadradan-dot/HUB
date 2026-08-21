@@ -30,6 +30,7 @@ app = FastAPI(title="X4G", docs_url=None, redoc_url=None)
 DATA_DIR = Path(os.environ.get("DATA_DIR", "/data"))
 DATA_FILE = DATA_DIR / "x4g_state.json"
 SECRET_FILE = DATA_DIR / "x4g_secret.key"
+TELEGRAM_SETTINGS_FILE = DATA_DIR / "telegram_settings.json"
 SAVE_LOCK = asyncio.Lock()
 BACKUP_FORMAT = "x4g-telegram-backup"
 BACKUP_VERSION = 1
@@ -37,6 +38,35 @@ BACKUP_MARKER = "#X4G_BACKUP_V1"
 _backup_task: asyncio.Task | None = None
 _backup_dirty = False
 _backup_last_result: dict = {"ok": None, "message": "هنوز بکاپی اجرا نشده", "at": None}
+
+_TELEGRAM_ENV_MAP = {
+    "bot_token": "TELEGRAM_BOT_TOKEN",
+    "admin_ids": "TELEGRAM_ADMIN_IDS",
+    "backup_chat_id": "TELEGRAM_BACKUP_CHAT_ID",
+    "interval_hours": "TELEGRAM_BACKUP_INTERVAL_HOURS",
+    "auto_restore": "TELEGRAM_BACKUP_AUTO_RESTORE",
+}
+
+def _load_telegram_settings() -> dict:
+    try:
+        if TELEGRAM_SETTINGS_FILE.exists():
+            data = json.loads(TELEGRAM_SETTINGS_FILE.read_text(encoding="utf-8"))
+            return data if isinstance(data, dict) else {}
+    except Exception as exc:
+        logger.warning(f"Could not load Telegram settings: {exc}")
+    return {}
+
+def _apply_telegram_settings(settings: dict):
+    """تنظیمات ذخیره‌شده پنل را روی تنظیمات محیطی همین پردازش اعمال می‌کند."""
+    for key, env_name in _TELEGRAM_ENV_MAP.items():
+        if key in settings and settings[key] is not None:
+            value = settings[key]
+            if isinstance(value, bool):
+                value = "true" if value else "false"
+            os.environ[env_name] = str(value).strip()
+
+TELEGRAM_SETTINGS = _load_telegram_settings()
+_apply_telegram_settings(TELEGRAM_SETTINGS)
 
 def _env_bool(name: str, default: bool = False) -> bool:
     value = os.environ.get(name)
@@ -57,6 +87,23 @@ def _backup_interval_hours() -> float:
         return max(0.25, float(os.environ.get("TELEGRAM_BACKUP_INTERVAL_HOURS", "6") or 6))
     except (TypeError, ValueError):
         return 6.0
+
+def _save_telegram_settings(settings: dict):
+    DATA_DIR.mkdir(parents=True, exist_ok=True)
+    tmp = TELEGRAM_SETTINGS_FILE.with_suffix(".tmp")
+    tmp.write_text(json.dumps(settings, ensure_ascii=False, indent=2), encoding="utf-8")
+    try:
+        os.chmod(tmp, 0o600)
+    except OSError:
+        pass
+    tmp.replace(TELEGRAM_SETTINGS_FILE)
+
+def _masked_token(token: str) -> str:
+    if not token:
+        return ""
+    if len(token) <= 10:
+        return "••••••••"
+    return f"{token[:5]}••••••{token[-4:]}"
 
 def _load_or_create_secret() -> str:
     """SECRET_KEY را روی دیسک ذخیره و ثابت نگه می‌دارد.
@@ -894,6 +941,78 @@ async def backup_status(_=Depends(require_auth)):
         "links": len(LINKS),
         "subs": len(SUBS),
     }
+
+@app.get("/api/telegram/settings")
+async def get_telegram_settings(_=Depends(require_auth)):
+    token = os.environ.get("TELEGRAM_BOT_TOKEN", "").strip()
+    return {
+        "token_configured": bool(token),
+        "token_masked": _masked_token(token),
+        "admin_ids": os.environ.get("TELEGRAM_ADMIN_IDS", ""),
+        "backup_chat_id": os.environ.get("TELEGRAM_BACKUP_CHAT_ID", ""),
+        "interval_hours": _backup_interval_hours(),
+        "auto_restore": _env_bool("TELEGRAM_BACKUP_AUTO_RESTORE", True),
+    }
+
+@app.put("/api/telegram/settings")
+async def update_telegram_settings(request: Request, _=Depends(require_auth)):
+    global TELEGRAM_SETTINGS, _backup_task
+    body = await request.json()
+    current_token = os.environ.get("TELEGRAM_BOT_TOKEN", "").strip()
+    supplied_token = str(body.get("bot_token") or "").strip()
+    token = "" if body.get("clear_token") else (supplied_token or current_token)
+    admin_ids = str(body.get("admin_ids") or "").replace(" ", "")
+    if admin_ids and any(not item.isdigit() for item in admin_ids.split(",")):
+        raise HTTPException(status_code=400, detail="آیدی ادمین‌ها باید عددی و با کاما جدا شده باشد")
+    backup_chat_id = str(body.get("backup_chat_id") or "").strip()
+    try:
+        interval = max(0.25, float(body.get("interval_hours", 6)))
+    except (TypeError, ValueError):
+        raise HTTPException(status_code=400, detail="فاصله بکاپ نامعتبر است")
+    settings = {
+        "bot_token": token,
+        "admin_ids": admin_ids,
+        "backup_chat_id": backup_chat_id,
+        "interval_hours": interval,
+        "auto_restore": bool(body.get("auto_restore", True)),
+    }
+    try:
+        _save_telegram_settings(settings)
+        TELEGRAM_SETTINGS = settings
+        _apply_telegram_settings(settings)
+        from telegram_bot import reconfigure_bot
+        await reconfigure_bot(token, admin_ids)
+        if _backup_task:
+            _backup_task.cancel()
+            _backup_task = None
+        if token and _telegram_backup_chat_id():
+            _backup_task = asyncio.create_task(_backup_loop())
+        log_activity("backup", "تنظیمات تلگرام از داخل پنل ذخیره شد", "ok")
+        return {"ok": True, "token_configured": bool(token), "token_masked": _masked_token(token)}
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"ذخیره تنظیمات ناموفق بود: {exc}")
+
+@app.post("/api/telegram/test")
+async def test_telegram_settings(request: Request, _=Depends(require_auth)):
+    try:
+        body = await request.json()
+    except Exception:
+        body = {}
+    token = str(body.get("bot_token") or os.environ.get("TELEGRAM_BOT_TOKEN", "")).strip()
+    if not token:
+        raise HTTPException(status_code=400, detail="توکن ربات تنظیم نشده است")
+    try:
+        async with httpx.AsyncClient(timeout=20.0) as client:
+            response = await client.get(f"https://api.telegram.org/bot{token}/getMe")
+            data = response.json()
+        if not data.get("ok"):
+            raise ValueError(data.get("description") or "توکن نامعتبر است")
+        bot = data["result"]
+        return {"ok": True, "username": bot.get("username"), "name": bot.get("first_name")}
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=f"اتصال به تلگرام ناموفق بود: {exc}")
 
 @app.get("/api/backup/download")
 async def download_backup(_=Depends(require_auth)):

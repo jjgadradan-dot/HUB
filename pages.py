@@ -1215,6 +1215,45 @@ a{color:inherit;text-decoration:none}
     <div><div class="tb-title"><i class="ti ti-cloud-upload"></i> بکاپ و بازیابی</div><div class="tb-sub">انتقال کامل کانفیگ‌ها، مصرف‌ها و گروه‌های ساب با همان شناسه‌ها</div></div>
     <div class="tb-right"><span class="badge bg-blue" id="backup-ready">در حال بررسی...</span></div>
   </div>
+  <div class="create-panel">
+    <div class="cp-head">
+      <div class="cp-head-icon"><i class="ti ti-brand-telegram"></i></div>
+      <div class="cp-head-text"><div class="cp-head-title">تنظیم اتصال تلگرام</div><div class="cp-head-sub">توکن، ادمین‌ها و مقصد بکاپ را مستقیم از پنل تنظیم کنید</div></div>
+    </div>
+    <div class="cp-body">
+      <div class="cp-row">
+        <div class="cp-block">
+          <div class="cp-block-label"><i class="ti ti-key"></i> توکن ربات BotFather</div>
+          <input class="cp-input-full" id="tg-token" type="password" autocomplete="new-password" placeholder="توکن جدید را وارد کنید">
+          <div style="font-size:9.5px;color:var(--t3);margin-top:7px" id="tg-token-state">هنوز تنظیم نشده</div>
+        </div>
+        <div class="cp-block">
+          <div class="cp-block-label"><i class="ti ti-users"></i> آیدی عددی ادمین‌ها</div>
+          <input class="cp-input-full" id="tg-admins" placeholder="123456789,987654321" dir="ltr">
+          <div style="font-size:9.5px;color:var(--t3);margin-top:7px">چند آیدی را با کاما جدا کنید</div>
+        </div>
+      </div>
+      <div class="cp-row">
+        <div class="cp-block">
+          <div class="cp-block-label"><i class="ti ti-message-2"></i> چت مقصد بکاپ</div>
+          <input class="cp-input-full" id="tg-chat" placeholder="مثلاً -1001234567890 یا آیدی شخصی" dir="ltr">
+          <div style="font-size:9.5px;color:var(--t3);margin-top:7px">ربات باید اجازه ارسال فایل و Pin داشته باشد</div>
+        </div>
+        <div class="cp-block">
+          <div class="cp-block-label"><i class="ti ti-clock"></i> فاصله بکاپ دوره‌ای</div>
+          <div style="display:flex;align-items:center;gap:8px"><input class="cp-input-full" id="tg-interval" type="number" min="0.25" step="0.25" value="6"><span style="color:var(--t3);font-size:11px">ساعت</span></div>
+          <label style="display:flex;align-items:center;gap:8px;margin-top:12px;color:var(--t2);font-size:11px;cursor:pointer"><input type="checkbox" id="tg-auto-restore" checked style="accent-color:var(--accent)"> بازیابی خودکار روی پنل خالی</label>
+        </div>
+      </div>
+      <div class="cp-footer">
+        <div class="cp-footer-note"><i class="ti ti-shield-lock"></i> توکن در فایل خصوصی داخل DATA_DIR ذخیره می‌شود و در API یا صفحه دوباره نمایش داده نمی‌شود.</div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <button class="btn btn-o" onclick="testTelegramConnection()"><i class="ti ti-plug-connected"></i> تست اتصال</button>
+          <button class="cp-submit-btn" onclick="saveTelegramSettings()"><i class="ti ti-device-floppy"></i> ذخیره تنظیمات</button>
+        </div>
+      </div>
+    </div>
+  </div>
   <div class="g2">
     <div class="srv-panel">
       <div class="srv-hero">
@@ -1469,7 +1508,8 @@ function renderErrs(errs){
 }
 async function loadBackupStatus(){
   try{
-    const r=await authF('/api/backup/status'),d=await r.json();
+    const [r,tr]=await Promise.all([authF('/api/backup/status'),authF('/api/telegram/settings')]);
+    const d=await r.json(),tg=await tr.json();
     const ready=document.getElementById('backup-ready');
     ready.textContent=d.telegram_ready?'تلگرام آماده است':'نیاز به تنظیم تلگرام';
     ready.className='badge '+(d.telegram_ready?'bg-green':'bg-amber');
@@ -1480,7 +1520,37 @@ async function loadBackupStatus(){
     document.getElementById('backup-last').textContent=last.at?(last.message+' · '+new Date(last.at).toLocaleString('fa-IR')):last.message||'—';
     document.getElementById('backup-domain').textContent=d.public_base_url||'تنظیم نشده — لینک قدیمی با تغییر دامنه حفظ نمی‌شود';
     document.getElementById('backup-tg-btn').disabled=!d.telegram_ready;
+    document.getElementById('tg-token').value='';
+    document.getElementById('tg-token').placeholder=tg.token_configured?'برای حفظ توکن فعلی خالی بگذارید':'توکن جدید را وارد کنید';
+    document.getElementById('tg-token-state').textContent=tg.token_configured?'توکن فعال: '+tg.token_masked:'هنوز توکنی تنظیم نشده';
+    document.getElementById('tg-admins').value=tg.admin_ids||'';
+    document.getElementById('tg-chat').value=tg.backup_chat_id||'';
+    document.getElementById('tg-interval').value=tg.interval_hours||6;
+    document.getElementById('tg-auto-restore').checked=!!tg.auto_restore;
   }catch(e){console.error(e)}
+}
+async function saveTelegramSettings(){
+  const body={
+    bot_token:document.getElementById('tg-token').value.trim(),
+    admin_ids:document.getElementById('tg-admins').value.trim(),
+    backup_chat_id:document.getElementById('tg-chat').value.trim(),
+    interval_hours:Number(document.getElementById('tg-interval').value)||6,
+    auto_restore:document.getElementById('tg-auto-restore').checked
+  };
+  try{
+    const r=await authF('/api/telegram/settings',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)}),d=await r.json().catch(()=>({}));
+    if(!r.ok)throw new Error(d.detail||'ذخیره تنظیمات ناموفق بود');
+    toast('تنظیمات تلگرام ذخیره و ربات راه‌اندازی شد ✓','ok');
+    await loadBackupStatus();
+  }catch(e){toast(e.message,'err')}
+}
+async function testTelegramConnection(){
+  try{
+    const token=document.getElementById('tg-token').value.trim();
+    const r=await authF('/api/telegram/test',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({bot_token:token})}),d=await r.json().catch(()=>({}));
+    if(!r.ok)throw new Error(d.detail||'اتصال ناموفق بود');
+    toast('اتصال موفق به @'+d.username+' ✓','ok');
+  }catch(e){toast(e.message,'err')}
 }
 async function sendTelegramBackup(){
   const btn=document.getElementById('backup-tg-btn'),old=btn.innerHTML;
