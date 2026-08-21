@@ -1273,7 +1273,7 @@ a{color:inherit;text-decoration:none}
       <div class="mig-step"><div class="mig-step-num">۱</div><div class="mig-step-body"><div class="mig-step-title">آخرین کد را در GitHub آماده کن</div><div class="mig-step-text">در GitHub مطمئن شو تغییرات Pull Request وارد شاخه <b>main</b> شده‌اند. بعد در Railway گزینه Deploy from GitHub Repo را بزن و همین مخزن HUB را انتخاب کن.</div><div class="mig-code">Repository: jjgadradan-dot/HUB &nbsp; | &nbsp; Branch: main</div></div></div>
       <div class="mig-step"><div class="mig-step-num">۲</div><div class="mig-step-body"><div class="mig-step-title">صبر کن Deploy سبز شود</div><div class="mig-step-text">در قسمت Deployments صبر کن وضعیت به Success برسد. اگر قرمز بود، اول لاگ خطا را بررسی کن.</div></div></div>
       <div class="mig-step"><div class="mig-step-num">۳</div><div class="mig-step-body"><div class="mig-step-title">Volume دائمی بساز</div><div class="mig-step-text">در Railway یک Volume بساز، مسیر آن را <b>/data</b> قرار بده و این Variable را ثبت کن:</div><div class="mig-code">DATA_DIR=/data</div></div></div>
-      <div class="mig-step"><div class="mig-step-num">۴</div><div class="mig-step-body"><div class="mig-step-title">دامنه Railway جدید را پیدا کن</div><div class="mig-step-text">از Settings → Networking دامنه‌ای که به <b>up.railway.app</b> ختم می‌شود کپی کن. سپس در Variables این مقدار را بدون https وارد کن:</div><div class="mig-code">CONFIG_PUBLIC_HOST=new-panel.up.railway.app</div></div></div>
+      <div class="mig-step"><div class="mig-step-num">۴</div><div class="mig-step-body"><div class="mig-step-title">دامنه Railway جدید را پیدا کن</div><div class="mig-step-text">از Settings → Networking دامنه‌ای که به <b>up.railway.app</b> ختم می‌شود کپی و نگه دار. دیگر لازم نیست دستی وارد Variables شوی.</div><div class="mig-code">new-panel.up.railway.app</div></div></div>
     </div>
   </div>
 
@@ -1283,7 +1283,7 @@ a{color:inherit;text-decoration:none}
       <div class="mig-step"><div class="mig-step-num">۱</div><div class="mig-step-body"><div class="mig-step-title">وارد پنل جدید شو</div><div class="mig-step-text">دامنه Railway جدید را باز کن، به /dashboard برو و با رمز پنل وارد شو. اگر هنوز بازیابی نشده، رمز اولیه X4GKING است.</div></div></div>
       <div class="mig-step"><div class="mig-step-num">۲</div><div class="mig-step-body"><div class="mig-step-title">همان تلگرام قبلی را تنظیم کن</div><div class="mig-step-text">در «بکاپ و بازیابی» همان توکن ربات و همان آیدی چت قبلی را وارد و ذخیره کن.</div></div></div>
       <div class="mig-step"><div class="mig-step-num">۳</div><div class="mig-step-body"><div class="mig-step-title">آخرین بکاپ را Restore کن</div><div class="mig-step-text">«بازیابی آخرین بکاپ تلگرام» را بزن. اگر جواب نداد، فایل JSON ذخیره‌شده را انتخاب کن و «بازیابی فایل انتخاب‌شده» را بزن.</div></div></div>
-      <div class="mig-step"><div class="mig-step-num">۴</div><div class="mig-step-body"><div class="mig-step-title">دو دامنه را کنترل کن</div><div class="mig-step-text">بعد از بازیابی باید دامنه ثابت ساب و دامنه اتصال کانفیگ دو مقدار متفاوت باشند:</div><div class="mig-code">Subscription: https://ping101.kdns.fr<br>Config host: new-panel.up.railway.app</div></div></div>
+      <div class="mig-step"><div class="mig-step-num">۴</div><div class="mig-step-body"><div class="mig-step-title">دو دامنه را داخل پنل وارد کن</div><div class="mig-step-text">در صفحه بکاپ، دامنه ثابت ساب و دامنه Railway جدید را در دو کادر جدا وارد و «ذخیره و فعال‌سازی فوری» را بزن. اگر API Token داری، «ثبت دامنه‌ها در Variables» را هم بزن:</div><div class="mig-code">Subscription: https://ping101.kdns.fr<br>Config host: new-panel.up.railway.app</div></div></div>
     </div>
   </div>
 
@@ -1380,17 +1380,58 @@ a{color:inherit;text-decoration:none}
       </div>
     </div>
   </div>
-  <div class="card">
-    <div class="card-title"><i class="ti ti-world"></i> شرط حفظ لینک مشتری‌ها بدون تغییر</div>
-    <div class="cl" style="margin-top:0"><i class="ti ti-info-circle"></i><span>لینک ساب روی دامنه ثابت ثبت‌شده می‌ماند، اما دامنه داخل کانفیگ‌های خروجی خودکار از Railway فعلی گرفته می‌شود. بعد از انتقال، مشتری همان ساب قبلی را Update می‌کند و دامنه کانفیگ بدون ارسال لینک جدید به Railway پنل تازه تغییر می‌کند.</span></div>
+  <div class="card mb16">
+    <div class="card-title"><i class="ti ti-world"></i> دامنه‌های پنل جدید</div>
+    <div class="cl" style="margin-top:0"><i class="ti ti-info-circle"></i><span>بعد از Restore فقط این دو کادر را پر کن. تغییرات همان لحظه داخل پنل فعال و در Volume ذخیره می‌شوند؛ نیازی به بازکردن Variables برای کارکرد پنل نیست.</span></div>
     <div class="form-row" style="margin-top:16px">
-      <div class="fg" style="flex:1;min-width:240px"><label>دامنه ثابت ساب مشتری‌ها</label><input class="fi" id="stable-domain-input" dir="ltr" placeholder="https://sub.example.com" style="width:100%"></div>
-      <button class="btn btn-p" onclick="saveStableDomain()"><i class="ti ti-device-floppy"></i> ذخیره دامنه</button>
-      <button class="btn btn-g" onclick="registerCurrentDomain()"><i class="ti ti-current-location"></i> ثبت دامنه فعلی</button>
+      <div class="fg" style="flex:1;min-width:240px"><label>۱ — دامنه ثابت لینک ساب‌ها</label><input class="fi" id="stable-domain-input" dir="ltr" placeholder="https://ping101.kdns.fr" style="width:100%"></div>
+      <div class="fg" style="flex:1;min-width:240px"><label>۲ — دامنه Railway داخل کانفیگ‌ها</label><input class="fi" id="config-domain-input" dir="ltr" placeholder="new-panel.up.railway.app" style="width:100%"></div>
+    </div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:14px">
+      <button class="btn btn-p" onclick="saveDomainSettings()"><i class="ti ti-device-floppy"></i> ذخیره و فعال‌سازی فوری</button>
+      <button class="btn btn-g" onclick="registerCurrentDomain()"><i class="ti ti-current-location"></i> دامنه فعلی = دامنه ساب</button>
     </div>
     <div class="sr" style="margin-top:10px"><span class="sr-k"><i class="ti ti-rss"></i> دامنه ثابت لینک ساب</span><span class="sr-v" id="backup-domain">تنظیم نشده</span></div>
     <div class="sr"><span class="sr-k"><i class="ti ti-server"></i> دامنه اتصال داخل کانفیگ‌ها</span><span class="sr-v" id="config-domain">دامنه Railway</span></div>
-    <div class="cl amber" id="railway-domain-warning" style="display:none"><i class="ti ti-alert-triangle"></i><span>این دامنه موقت Railway است. ثبت آن مسیرها را ثابت نگه می‌دارد، اما برای انتقال بدون قطعی باید Custom Domain را به سرویس جدید منتقل کنید؛ دامنه موقت Railway قابل انتقال تضمینی نیست.</span></div>
+    <div class="cl amber" id="railway-domain-warning" style="display:none"><i class="ti ti-alert-triangle"></i><span>برای لینک ساب بهتر است دامنه اختصاصی ثابت باشد؛ دامنه موقت Railway قابل انتقال تضمینی نیست.</span></div>
+  </div>
+
+  <div class="create-panel">
+    <div class="cp-head">
+      <div class="cp-head-icon"><i class="ti ti-brand-railway"></i></div>
+      <div class="cp-head-text"><div class="cp-head-title">همگام‌سازی خودکار با Railway Variables</div><div class="cp-head-sub">اختیاری — دو متغیر دامنه را با API رسمی Railway ثبت و سرویس را Redeploy می‌کند</div></div>
+    </div>
+    <div class="cp-body">
+      <div class="cp-block mb16">
+        <div class="cp-block-label"><i class="ti ti-link"></i> لینک صفحه Variables همین سرویس</div>
+        <input class="cp-input-full" id="rw-dashboard-url" dir="ltr" placeholder="https://railway.com/project/.../service/.../variables?environmentId=...">
+        <div style="font-size:9.5px;color:var(--t3);margin-top:7px">همان لینکی که از نوار آدرس صفحه Variables کپی می‌کنی؛ شناسه‌ها خودکار از آن خوانده می‌شوند.</div>
+      </div>
+      <div class="cp-row">
+        <div class="cp-block">
+          <div class="cp-block-label"><i class="ti ti-key"></i> Railway API Token</div>
+          <input class="cp-input-full" id="rw-api-token" type="password" autocomplete="new-password" placeholder="توکن را فقط اینجا وارد کن">
+          <div style="font-size:9.5px;color:var(--t3);margin-top:7px" id="rw-token-state">توکن تنظیم نشده</div>
+          <a href="https://railway.com/account/tokens" target="_blank" style="display:inline-flex;align-items:center;gap:4px;color:var(--accent2);font-size:10px;margin-top:8px"><i class="ti ti-external-link"></i> ساخت Account Token در Railway</a>
+        </div>
+        <div class="cp-block">
+          <div class="cp-block-label"><i class="ti ti-shield-lock"></i> نوع توکن</div>
+          <select class="cp-input-full fs" id="rw-token-type">
+            <option value="account">Account Token</option>
+            <option value="project">Project Token</option>
+          </select>
+          <div style="font-size:9.5px;color:var(--t3);margin-top:7px">توکن در فایل خصوصی /data ذخیره و داخل بکاپ تلگرام فرستاده نمی‌شود.</div>
+        </div>
+      </div>
+      <div class="cp-footer">
+        <div class="cp-footer-note"><i class="ti ti-info-circle"></i> اول تنظیمات اتصال را ذخیره و تست کن؛ سپس دکمه همگام‌سازی را بزن. Railway پس از ثبت Variables یک Deploy جدید شروع می‌کند.</div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <button class="btn btn-o" onclick="saveRailwayConnection()"><i class="ti ti-device-floppy"></i> ذخیره اتصال</button>
+          <button class="btn btn-o" onclick="testRailwayConnection()"><i class="ti ti-plug-connected"></i> تست API</button>
+          <button class="cp-submit-btn" onclick="syncRailwayVariables()"><i class="ti ti-refresh"></i> ثبت دامنه‌ها در Variables</button>
+        </div>
+      </div>
+    </div>
   </div>
 </section>
 <section class="pg" id="pg-settings">
@@ -1610,8 +1651,8 @@ function renderErrs(errs){
 }
 async function loadBackupStatus(){
   try{
-    const [r,tr,dr]=await Promise.all([authF('/api/backup/status'),authF('/api/telegram/settings'),authF('/api/domain/settings')]);
-    const d=await r.json(),tg=await tr.json(),domain=await dr.json();
+    const [r,tr,dr,rr]=await Promise.all([authF('/api/backup/status'),authF('/api/telegram/settings'),authF('/api/domain/settings'),authF('/api/railway/settings')]);
+    const d=await r.json(),tg=await tr.json(),domain=await dr.json(),rw=await rr.json();
     const ready=document.getElementById('backup-ready');
     ready.textContent=d.telegram_ready?'تلگرام آماده است':'نیاز به تنظیم تلگرام';
     ready.className='badge '+(d.telegram_ready?'bg-green':'bg-amber');
@@ -1623,7 +1664,13 @@ async function loadBackupStatus(){
     document.getElementById('backup-domain').textContent=domain.public_base_url||'تنظیم نشده — لینک قدیمی با تغییر دامنه حفظ نمی‌شود';
     document.getElementById('config-domain').textContent=domain.config_host||'دامنه Railway قابل تشخیص نیست';
     document.getElementById('stable-domain-input').value=domain.public_base_url||domain.current_url||'';
+    document.getElementById('config-domain-input').value=domain.config_host||'';
     document.getElementById('railway-domain-warning').style.display=domain.is_temporary_railway?'flex':'none';
+    document.getElementById('rw-dashboard-url').value=rw.dashboard_url||'';
+    document.getElementById('rw-api-token').value='';
+    document.getElementById('rw-api-token').placeholder=rw.token_configured?'برای حفظ توکن فعلی خالی بگذارید':'توکن را فقط اینجا وارد کن';
+    document.getElementById('rw-token-state').textContent=rw.token_configured?'توکن فعال: '+rw.token_masked:'توکن تنظیم نشده';
+    document.getElementById('rw-token-type').value=rw.token_type||'account';
     document.getElementById('backup-tg-btn').disabled=!d.telegram_ready;
     document.getElementById('tg-token').value='';
     document.getElementById('tg-token').placeholder=tg.token_configured?'برای حفظ توکن فعلی خالی بگذارید':'توکن جدید را وارد کنید';
@@ -1634,14 +1681,16 @@ async function loadBackupStatus(){
     document.getElementById('tg-auto-restore').checked=!!tg.auto_restore;
   }catch(e){console.error(e)}
 }
-async function saveStableDomain(){
+async function saveDomainSettings(){
   const public_base_url=document.getElementById('stable-domain-input').value.trim();
+  const config_public_host=document.getElementById('config-domain-input').value.trim();
+  if(!public_base_url||!config_public_host){toast('هر دو دامنه را وارد کن','err');return false}
   try{
-    const r=await authF('/api/domain/settings',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({public_base_url})}),d=await r.json().catch(()=>({}));
-    if(!r.ok)throw new Error(d.detail||'ثبت دامنه ناموفق بود');
-    toast('دامنه ثابت ذخیره و وارد بکاپ شد ✓','ok');
-    await loadBackupStatus();loadLinks();loadSubs();
-  }catch(e){toast(e.message,'err')}
+    const r=await authF('/api/domain/settings',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({public_base_url,config_public_host})}),d=await r.json().catch(()=>({}));
+    if(!r.ok)throw new Error(d.detail||'ثبت دامنه‌ها ناموفق بود');
+    toast('هر دو دامنه ذخیره و فوری فعال شدند ✓','ok');
+    await loadBackupStatus();loadLinks();loadSubs();return true;
+  }catch(e){toast(e.message,'err');return false}
 }
 async function registerCurrentDomain(){
   if(!confirm('دامنه‌ای که الان پنل با آن باز شده به‌عنوان دامنه ثابت همه لینک‌های ساب ثبت شود؟'))return;
@@ -1650,6 +1699,40 @@ async function registerCurrentDomain(){
     if(!r.ok)throw new Error(d.detail||'ثبت دامنه ناموفق بود');
     toast('دامنه فعلی ثبت شد؛ حالا یک بکاپ جدید بگیرید ✓','ok');
     await loadBackupStatus();loadLinks();loadSubs();
+  }catch(e){toast(e.message,'err')}
+}
+async function saveRailwayConnection(){
+  const body={
+    dashboard_url:document.getElementById('rw-dashboard-url').value.trim(),
+    api_token:document.getElementById('rw-api-token').value.trim(),
+    token_type:document.getElementById('rw-token-type').value
+  };
+  try{
+    const r=await authF('/api/railway/settings',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)}),d=await r.json().catch(()=>({}));
+    if(!r.ok)throw new Error(d.detail||'ذخیره اتصال Railway ناموفق بود');
+    toast('اتصال Railway ذخیره شد ✓','ok');await loadBackupStatus();return true;
+  }catch(e){toast(e.message,'err');return false}
+}
+async function testRailwayConnection(){
+  const saved=await saveRailwayConnection();if(!saved)return;
+  try{
+    const r=await authF('/api/railway/test',{method:'POST'}),d=await r.json().catch(()=>({}));
+    if(!r.ok)throw new Error(d.detail||'اتصال Railway ناموفق بود');
+    toast('اتصال API Railway موفق بود ✓','ok');
+  }catch(e){toast(e.message,'err')}
+}
+async function syncRailwayVariables(){
+  const pendingPublic=document.getElementById('stable-domain-input').value.trim();
+  const pendingConfig=document.getElementById('config-domain-input').value.trim();
+  const connectionSaved=await saveRailwayConnection();if(!connectionSaved)return;
+  document.getElementById('stable-domain-input').value=pendingPublic;
+  document.getElementById('config-domain-input').value=pendingConfig;
+  const domainsSaved=await saveDomainSettings();if(!domainsSaved)return;
+  if(!confirm('دو متغیر دامنه در Railway ثبت شوند؟ این کار یک Deploy جدید شروع می‌کند.'))return;
+  try{
+    const r=await authF('/api/railway/sync-variables',{method:'POST'}),d=await r.json().catch(()=>({}));
+    if(!r.ok)throw new Error(d.detail||'ثبت Variables ناموفق بود');
+    toast('Variables ثبت شد؛ Railway در حال Deploy است ✓','ok');
   }catch(e){toast(e.message,'err')}
 }
 async function saveTelegramSettings(){

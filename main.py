@@ -4,6 +4,7 @@ import os
 import hashlib
 import secrets
 import time
+import re
 import aiofiles
 from datetime import datetime, timedelta
 from copy import deepcopy
@@ -32,6 +33,7 @@ DATA_FILE = DATA_DIR / "x4g_state.json"
 SECRET_FILE = DATA_DIR / "x4g_secret.key"
 TELEGRAM_SETTINGS_FILE = DATA_DIR / "telegram_settings.json"
 APP_SETTINGS_FILE = DATA_DIR / "app_settings.json"
+RAILWAY_SETTINGS_FILE = DATA_DIR / "railway_settings.json"
 SAVE_LOCK = asyncio.Lock()
 BACKUP_FORMAT = "x4g-telegram-backup"
 BACKUP_VERSION = 1
@@ -97,9 +99,60 @@ def _normalise_public_base_url(value: str) -> str:
     port = f":{parsed.port}" if parsed.port else ""
     return f"{parsed.scheme}://{parsed.hostname}{port}"
 
+def _normalise_config_host(value: str) -> str:
+    value = (value or "").strip().rstrip("/")
+    if not value:
+        return ""
+    parsed = urlparse(value if "://" in value else f"https://{value}")
+    if not parsed.hostname or parsed.path not in {"", "/"} or parsed.query or parsed.fragment:
+        raise ValueError("دامنه Railway کانفیگ معتبر نیست")
+    return parsed.hostname
+
+def _parse_railway_resource_url(value: str) -> dict:
+    """شناسه‌های project/service/environment را از URL داشبورد Railway استخراج می‌کند."""
+    value = (value or "").strip()
+    result = {}
+    if value:
+        parsed = urlparse(value)
+        parts = [p for p in parsed.path.split("/") if p]
+        try:
+            result["project_id"] = parts[parts.index("project") + 1]
+            result["service_id"] = parts[parts.index("service") + 1]
+        except (ValueError, IndexError):
+            raise ValueError("لینک Railway باید صفحه Variables همان سرویس باشد")
+        query = dict(x.split("=", 1) for x in parsed.query.split("&") if "=" in x)
+        result["environment_id"] = query.get("environmentId", "")
+    return result
+
+def _valid_railway_id(value: str) -> bool:
+    return bool(re.fullmatch(r"[A-Za-z0-9_-]{8,80}", value or ""))
+
 APP_SETTINGS = _load_app_settings()
 if APP_SETTINGS.get("public_base_url"):
     os.environ["PUBLIC_BASE_URL"] = str(APP_SETTINGS["public_base_url"])
+if APP_SETTINGS.get("config_public_host"):
+    os.environ["CONFIG_PUBLIC_HOST"] = str(APP_SETTINGS["config_public_host"])
+
+def _load_railway_settings() -> dict:
+    try:
+        if RAILWAY_SETTINGS_FILE.exists():
+            data = json.loads(RAILWAY_SETTINGS_FILE.read_text(encoding="utf-8"))
+            return data if isinstance(data, dict) else {}
+    except Exception as exc:
+        logger.warning(f"Could not load Railway settings: {exc}")
+    return {}
+
+def _save_railway_settings(settings: dict):
+    DATA_DIR.mkdir(parents=True, exist_ok=True)
+    tmp = RAILWAY_SETTINGS_FILE.with_suffix(".tmp")
+    tmp.write_text(json.dumps(settings, ensure_ascii=False, indent=2), encoding="utf-8")
+    try:
+        os.chmod(tmp, 0o600)
+    except OSError:
+        pass
+    tmp.replace(RAILWAY_SETTINGS_FILE)
+
+RAILWAY_SETTINGS = _load_railway_settings()
 
 def _env_bool(name: str, default: bool = False) -> bool:
     value = os.environ.get(name)
@@ -1045,18 +1098,27 @@ async def update_domain_settings(request: Request, _=Depends(require_auth)):
     body = await request.json()
     try:
         public_url = _normalise_public_base_url(str(body.get("public_base_url") or ""))
+        config_host = _normalise_config_host(str(body.get("config_public_host") or ""))
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
-    APP_SETTINGS = {**APP_SETTINGS, "public_base_url": public_url}
+    APP_SETTINGS = {
+        **APP_SETTINGS,
+        "public_base_url": public_url,
+        "config_public_host": config_host,
+    }
     _save_app_settings(APP_SETTINGS)
     if public_url:
         os.environ["PUBLIC_BASE_URL"] = public_url
-        CONFIG["host"] = urlparse(public_url).hostname or CONFIG["host"]
     else:
         os.environ.pop("PUBLIC_BASE_URL", None)
+    if config_host:
+        os.environ["CONFIG_PUBLIC_HOST"] = config_host
+        CONFIG["host"] = config_host
+    else:
+        os.environ.pop("CONFIG_PUBLIC_HOST", None)
     await save_state()  # بکاپ خودکار تنظیم دامنه را هم ثبت می‌کند.
-    log_activity("backup", f"دامنه ثابت {'ثبت شد: ' + public_url if public_url else 'پاک شد'}", "ok")
-    return {"ok": True, "public_base_url": public_url}
+    log_activity("backup", f"دامنه ساب و کانفیگ از داخل پنل ذخیره شدند", "ok")
+    return {"ok": True, "public_base_url": public_url, "config_public_host": config_host}
 
 @app.post("/api/domain/register-current")
 async def register_current_domain(request: Request, _=Depends(require_auth)):
@@ -1069,10 +1131,125 @@ async def register_current_domain(request: Request, _=Depends(require_auth)):
     APP_SETTINGS = {**APP_SETTINGS, "public_base_url": public_url}
     _save_app_settings(APP_SETTINGS)
     os.environ["PUBLIC_BASE_URL"] = public_url
-    CONFIG["host"] = urlparse(public_url).hostname or CONFIG["host"]
     await save_state()
     log_activity("backup", f"دامنه فعلی به‌عنوان دامنه ثابت ثبت شد: {public_url}", "ok")
     return {"ok": True, "public_base_url": public_url, "is_temporary_railway": "railway.app" in (urlparse(public_url).hostname or "")}
+
+def _railway_resolved_settings() -> dict:
+    project_id = RAILWAY_SETTINGS.get("project_id") or os.environ.get("RAILWAY_PROJECT_ID", "")
+    service_id = RAILWAY_SETTINGS.get("service_id") or os.environ.get("RAILWAY_SERVICE_ID", "")
+    environment_id = RAILWAY_SETTINGS.get("environment_id") or os.environ.get("RAILWAY_ENVIRONMENT_ID", "")
+    dashboard_url = RAILWAY_SETTINGS.get("dashboard_url", "")
+    if not dashboard_url and project_id and service_id and environment_id:
+        dashboard_url = f"https://railway.com/project/{project_id}/service/{service_id}/variables?environmentId={environment_id}"
+    return {
+        "api_token": RAILWAY_SETTINGS.get("api_token", ""),
+        "token_type": RAILWAY_SETTINGS.get("token_type", "account"),
+        "project_id": project_id,
+        "service_id": service_id,
+        "environment_id": environment_id,
+        "dashboard_url": dashboard_url,
+    }
+
+def _railway_headers(settings: dict) -> dict:
+    token = settings.get("api_token", "")
+    header = "Project-Access-Token" if settings.get("token_type") == "project" else "Authorization"
+    value = token if header == "Project-Access-Token" else f"Bearer {token}"
+    return {header: value, "Content-Type": "application/json"}
+
+async def _railway_graphql(settings: dict, query: str, variables: dict) -> dict:
+    if not settings.get("api_token"):
+        raise ValueError("Railway API Token وارد نشده است")
+    async with httpx.AsyncClient(timeout=httpx.Timeout(40.0, connect=15.0)) as client:
+        response = await client.post(
+            "https://backboard.railway.com/graphql/v2",
+            headers=_railway_headers(settings),
+            json={"query": query, "variables": variables},
+        )
+        response.raise_for_status()
+        data = response.json()
+    if data.get("errors"):
+        raise ValueError("؛ ".join(str(e.get("message", e)) for e in data["errors"]))
+    return data.get("data") or {}
+
+@app.get("/api/railway/settings")
+async def get_railway_settings(_=Depends(require_auth)):
+    settings = _railway_resolved_settings()
+    token = settings.pop("api_token", "")
+    return {**settings, "token_configured": bool(token), "token_masked": _masked_token(token)}
+
+@app.put("/api/railway/settings")
+async def update_railway_settings(request: Request, _=Depends(require_auth)):
+    global RAILWAY_SETTINGS
+    body = await request.json()
+    try:
+        parsed = _parse_railway_resource_url(str(body.get("dashboard_url") or ""))
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    current = _railway_resolved_settings()
+    token = str(body.get("api_token") or "").strip() or current.get("api_token", "")
+    settings = {
+        "api_token": token,
+        "token_type": "project" if body.get("token_type") == "project" else "account",
+        "project_id": parsed.get("project_id") or str(body.get("project_id") or current.get("project_id") or "").strip(),
+        "service_id": parsed.get("service_id") or str(body.get("service_id") or current.get("service_id") or "").strip(),
+        "environment_id": parsed.get("environment_id") or str(body.get("environment_id") or current.get("environment_id") or "").strip(),
+        "dashboard_url": str(body.get("dashboard_url") or current.get("dashboard_url") or "").strip(),
+    }
+    for key in ("project_id", "service_id", "environment_id"):
+        if not _valid_railway_id(settings[key]):
+            raise HTTPException(status_code=400, detail=f"شناسه {key} معتبر نیست")
+    RAILWAY_SETTINGS = settings
+    _save_railway_settings(settings)
+    return {"ok": True, "token_configured": bool(token), "token_masked": _masked_token(token)}
+
+@app.post("/api/railway/test")
+async def test_railway_connection(_=Depends(require_auth)):
+    settings = _railway_resolved_settings()
+    try:
+        if settings.get("token_type") == "project":
+            query = "query { projectToken { projectId environmentId } }"
+        else:
+            query = "query { me { id name } }"
+        data = await _railway_graphql(settings, query, {})
+        return {"ok": True, "message": "اتصال API Railway موفق بود", "data": data}
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=f"اتصال Railway ناموفق بود: {exc}")
+
+@app.post("/api/railway/sync-variables")
+async def sync_railway_variables(_=Depends(require_auth)):
+    settings = _railway_resolved_settings()
+    for key in ("project_id", "service_id", "environment_id"):
+        if not _valid_railway_id(settings.get(key, "")):
+            raise HTTPException(status_code=400, detail=f"شناسه {key} تنظیم نشده یا معتبر نیست")
+    public_url = os.environ.get("PUBLIC_BASE_URL", "").strip()
+    config_host = os.environ.get("CONFIG_PUBLIC_HOST", "").strip() or get_host()
+    if not public_url or not config_host:
+        raise HTTPException(status_code=400, detail="ابتدا هر دو دامنه ساب و کانفیگ را ذخیره کنید")
+    mutation = """
+    mutation variableCollectionUpsert($input: VariableCollectionUpsertInput!) {
+      variableCollectionUpsert(input: $input)
+    }
+    """
+    variables = {"input": {
+        "projectId": settings["project_id"],
+        "environmentId": settings["environment_id"],
+        "serviceId": settings["service_id"],
+        "variables": {
+            "PUBLIC_BASE_URL": public_url,
+            "CONFIG_PUBLIC_HOST": config_host,
+        },
+    }}
+    try:
+        await _railway_graphql(settings, mutation, variables)
+        log_activity("backup", "دامنه‌ها با Variables سرویس Railway همگام شدند", "ok")
+        return {
+            "ok": True,
+            "message": "متغیرها در Railway ثبت شدند؛ Railway یک Deploy جدید شروع می‌کند",
+            "variables": {"PUBLIC_BASE_URL": public_url, "CONFIG_PUBLIC_HOST": config_host},
+        }
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=f"ثبت Variables ناموفق بود: {exc}")
 
 @app.get("/api/telegram/settings")
 async def get_telegram_settings(_=Depends(require_auth)):
