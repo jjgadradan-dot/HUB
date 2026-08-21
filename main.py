@@ -565,7 +565,16 @@ def generate_vless_link(
     fp = (fingerprint or DEFAULT_FINGERPRINT).strip() or DEFAULT_FINGERPRINT
     if fp not in FINGERPRINTS:
         fp = DEFAULT_FINGERPRINT
-    alpn_val = (alpn or "").strip() or DEFAULT_ALPN_BY_PROTOCOL.get(protocol, "http/1.1")
+    requested_alpn = (alpn or "").strip() or DEFAULT_ALPN_BY_PROTOCOL.get(protocol, "http/1.1")
+    # WebSocket کلاسیک فقط روی HTTP/1.1 قابل اتکاست. اگر h2/h3 جلوتر باشد،
+    # Cloudflare آن را مذاکره می‌کند ولی Upgrade وب‌سوکت معمولی انجام نمی‌شود.
+    if protocol == "vless-ws":
+        alpn_val = "http/1.1"
+    else:
+        # XHTTP فعلی روی HTTP/2/1.1 است؛ h3 در کلاینت‌های Xray و پراکسی Cloudflare
+        # می‌تواند باعث انتخاب ترابرد ناسازگار و قطع همه کانفیگ‌ها شود.
+        tokens = [x.strip() for x in requested_alpn.split(",") if x.strip() in {"h2", "http/1.1"}]
+        alpn_val = ",".join(dict.fromkeys(tokens)) or DEFAULT_ALPN_BY_PROTOCOL.get(protocol, "h2,http/1.1")
     port_val = port or DEFAULT_PORT
     if not (MIN_PORT <= port_val <= MAX_PORT):
         port_val = DEFAULT_PORT
