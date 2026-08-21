@@ -629,6 +629,18 @@ def generate_uuid() -> str:
 def now_ir() -> datetime:
     return datetime.now(IRAN_TZ)
 
+def normalise_alpn_selection(value: str | None) -> str:
+    selected = {x.strip().lower() for x in (value or "").split(",")}
+    return ",".join(x for x in ("h3", "h2", "http/1.1") if x in selected)
+
+def effective_alpn_for_protocol(protocol: str, requested: str | None = None) -> str:
+    """ALPN انتخابی را به خروجی امن و واقعاً قابل‌استفاده هر ترابرد تبدیل می‌کند."""
+    requested_alpn = normalise_alpn_selection(requested) or DEFAULT_ALPN_BY_PROTOCOL.get(protocol, "http/1.1")
+    if protocol == "vless-ws":
+        return "http/1.1"
+    tokens = [x.strip() for x in requested_alpn.split(",") if x.strip() in {"h2", "http/1.1"}]
+    return ",".join(dict.fromkeys(tokens)) or DEFAULT_ALPN_BY_PROTOCOL.get(protocol, "h2,http/1.1")
+
 def generate_vless_link(
     uuid: str,
     host: str,
@@ -643,16 +655,10 @@ def generate_vless_link(
     fp = (fingerprint or DEFAULT_FINGERPRINT).strip() or DEFAULT_FINGERPRINT
     if fp not in FINGERPRINTS:
         fp = DEFAULT_FINGERPRINT
-    requested_alpn = (alpn or "").strip() or DEFAULT_ALPN_BY_PROTOCOL.get(protocol, "http/1.1")
-    # WebSocket کلاسیک فقط روی HTTP/1.1 قابل اتکاست. اگر h2/h3 جلوتر باشد،
-    # Cloudflare آن را مذاکره می‌کند ولی Upgrade وب‌سوکت معمولی انجام نمی‌شود.
-    if protocol == "vless-ws":
-        alpn_val = "http/1.1"
-    else:
-        # XHTTP فعلی روی HTTP/2/1.1 است؛ h3 در کلاینت‌های Xray و پراکسی Cloudflare
-        # می‌تواند باعث انتخاب ترابرد ناسازگار و قطع همه کانفیگ‌ها شود.
-        tokens = [x.strip() for x in requested_alpn.split(",") if x.strip() in {"h2", "http/1.1"}]
-        alpn_val = ",".join(dict.fromkeys(tokens)) or DEFAULT_ALPN_BY_PROTOCOL.get(protocol, "h2,http/1.1")
+    # WebSocket کلاسیک فقط HTTP/1.1 و XHTTP فعلی HTTP/2/1.1 را استفاده می‌کند.
+    # h3 قابل انتخاب و ذخیره است، اما تا وقتی ترابرد QUIC اضافه نشده وارد خروجی
+    # ناسازگار نمی‌شود تا مشکل قطع‌شدن Cloudflare دوباره تکرار نشود.
+    alpn_val = effective_alpn_for_protocol(protocol, alpn)
     port_val = port or DEFAULT_PORT
     if not (MIN_PORT <= port_val <= MAX_PORT):
         port_val = DEFAULT_PORT
@@ -1462,7 +1468,7 @@ async def make_link(
             "sub_id": sub_id,
             "protocol": protocol,
             "fingerprint": fingerprint,
-            "alpn": (alpn or "").strip()[:100],
+            "alpn": normalise_alpn_selection(alpn),
             "port": port,
             "ip_limit": max(0, ip_limit),
             "speed_limit_bytes": max(0, speed_limit_bytes),
@@ -1607,6 +1613,7 @@ async def create_link(request: Request, _=Depends(require_auth)):
         "uuid": uid,
         **link,
         "expired": False,
+        "effective_alpn": effective_alpn_for_protocol(link.get("protocol", DEFAULT_PROTOCOL), link.get("alpn")),
         "vless_link": vless_link_for_link(link, uid, host),
         "sub_url": f"{sub_base}/sub/{uid}",
     }
@@ -1625,6 +1632,7 @@ async def list_links(request: Request, _=Depends(require_auth)):
             **d,
             "protocol": proto,
             "expired": is_link_expired(d),
+            "effective_alpn": effective_alpn_for_protocol(proto, d.get("alpn")),
             "vless_link": vless_link_for_link(d, uid, host),
             "sub_url": f"{sub_base}/sub/{uid}",
             "connected_ips": len(unique_ips_for_uuid(uid)),
@@ -1662,7 +1670,7 @@ async def update_link(uid: str, request: Request, _=Depends(require_auth)):
             fp = str(body.get("fingerprint") or DEFAULT_FINGERPRINT).strip().lower()
             link["fingerprint"] = fp if fp in FINGERPRINTS else DEFAULT_FINGERPRINT
         if "alpn" in body:
-            link["alpn"] = str(body.get("alpn") or "").strip()[:100]
+            link["alpn"] = normalise_alpn_selection(str(body.get("alpn") or ""))
         if "port" in body:
             try:
                 p = int(body.get("port") or DEFAULT_PORT)

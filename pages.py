@@ -329,6 +329,12 @@ a{color:inherit;text-decoration:none}
 .chip{font-size:10.5px;font-weight:700;padding:5px 12px;border-radius:8px;background:var(--accent-d);color:var(--t2);border:1px solid var(--card-b);cursor:pointer;transition:.15s;white-space:nowrap}
 .chip:hover{background:rgba(59,130,246,.18);color:var(--accent2)}
 .chip.active{background:var(--accent);color:#fff;border-color:var(--accent);box-shadow:0 3px 10px rgba(59,130,246,.35)}
+.alpn-selector{display:flex;gap:7px;flex-wrap:wrap;margin-top:8px}
+.alpn-opt{display:flex;align-items:center;gap:6px;padding:7px 11px;border-radius:9px;background:var(--accent-d);border:1px solid var(--card-b);color:var(--t2);font-size:10.5px;font-weight:700;cursor:pointer;transition:.15s;user-select:none}
+.alpn-opt:hover{border-color:var(--card-bh);color:var(--accent2)}
+.alpn-opt.active{background:var(--accent);border-color:var(--accent);color:#fff;box-shadow:0 3px 10px rgba(59,130,246,.28)}
+.alpn-opt.experimental.active{background:var(--purple);border-color:var(--purple)}
+.alpn-effective{font-size:9.5px;color:var(--t3);margin-top:9px;line-height:1.7}
 .proto-cards{display:grid;grid-template-columns:repeat(3,1fr);gap:9px}
 .proto-card{border:1.5px solid var(--card-b);border-radius:13px;padding:13px 12px;cursor:pointer;transition:.18s;text-align:center;position:relative;background:rgba(0,0,0,.1)}
 [data-theme="light"] .proto-card{background:#fff}
@@ -803,7 +809,15 @@ a{color:inherit;text-decoration:none}
           <option value="randomized">randomized</option>
         </select>
       </div>
-      <div class="fg" style="flex:1"><label>ALPN (خالی = پیش‌فرض)</label><input class="fi" id="el-alpn" placeholder="مثلاً: h2,http/1.1" style="width:100%"></div>
+      <div class="fg" style="flex:1"><label>ALPN چندانتخابی</label>
+        <input type="hidden" id="el-alpn" value="">
+        <div class="alpn-selector" id="el-alpn-selector" style="margin-top:0">
+          <button type="button" class="alpn-opt" data-value="http/1.1" onclick="toggleAlpnOption('el',this)">http/1.1</button>
+          <button type="button" class="alpn-opt" data-value="h2" onclick="toggleAlpnOption('el',this)">h2</button>
+          <button type="button" class="alpn-opt experimental" data-value="h3" onclick="toggleAlpnOption('el',this)">h3 جدید</button>
+        </div>
+        <div class="alpn-effective" id="el-alpn-effective">بدون انتخاب = خودکار و امن</div>
+      </div>
     </div>
     <div class="form-row" style="margin-bottom:16px">
       <div class="fg" style="flex:1"><label>پورت اتصال</label><input class="fi" id="el-port" type="number" min="1" max="65535" style="width:100%"></div>
@@ -1015,17 +1029,20 @@ a{color:inherit;text-decoration:none}
           </select>
         </div>
         <div class="cp-block">
-          <div class="cp-block-label"><i class="ti ti-antenna-bars-5"></i> ALPN</div>
-          <select class="cp-input-full fs" id="nl-alpn-preset" onchange="onAlpnPresetChange()">
-            <option value="">پیش‌فرض پروتکل</option>
-            <option value="h2,http/1.1">h2,http/1.1</option>
-            <option value="http/1.1">http/1.1</option>
-            <option value="h2">h2</option>
-            <option value="__custom__">دستی...</option>
-          </select>
-          <div class="cp-mini-row">
-            <input class="cp-input-full" id="nl-alpn" placeholder="مقدار دستی ALPN" style="display:none">
+          <div class="cp-block-label"><i class="ti ti-antenna-bars-5"></i> ALPN چندانتخابی</div>
+          <input type="hidden" id="nl-alpn" value="">
+          <div class="alpn-selector" id="nl-alpn-selector">
+            <button type="button" class="alpn-opt" data-value="http/1.1" onclick="toggleAlpnOption('nl',this)"><i class="ti ti-world"></i> HTTP/1.1</button>
+            <button type="button" class="alpn-opt" data-value="h2" onclick="toggleAlpnOption('nl',this)"><i class="ti ti-stack-2"></i> HTTP/2 (h2)</button>
+            <button type="button" class="alpn-opt experimental" data-value="h3" onclick="toggleAlpnOption('nl',this)"><i class="ti ti-bolt"></i> HTTP/3 (h3) جدید</button>
           </div>
+          <div class="chip-row">
+            <span class="chip active" onclick="setAlpnProfile('nl','',this)">خودکار و امن</span>
+            <span class="chip" onclick="setAlpnProfile('nl','http/1.1',this)">فقط WS</span>
+            <span class="chip" onclick="setAlpnProfile('nl','h2,http/1.1',this)">ترکیبی h2 + http/1.1</span>
+            <span class="chip" onclick="setAlpnProfile('nl','h3,h2,http/1.1',this)">همه باهم</span>
+          </div>
+          <div class="alpn-effective" id="nl-alpn-effective">پیشنهادی: حالت خودکار؛ WS با http/1.1 و XHTTP با h2,http/1.1 خروجی می‌گیرد.</div>
         </div>
       </div>
       <div class="cp-row mb16">
@@ -1594,11 +1611,24 @@ function setSpeedLimit(n,el){
   document.querySelectorAll('#speed-chips .chip').forEach(c=>c.classList.remove('active'));
   el.classList.add('active');
 }
-function onAlpnPresetChange(){
-  const p=document.getElementById('nl-alpn-preset').value;
-  const inp=document.getElementById('nl-alpn');
-  if(p==='__custom__'){inp.style.display='block';inp.value='';inp.focus();}
-  else{inp.style.display='none';inp.value=p;}
+const ALPN_ORDER=['h3','h2','http/1.1'];
+function setAlpnValue(scope,value){
+  const selected=new Set(String(value||'').split(',').map(x=>x.trim()).filter(x=>ALPN_ORDER.includes(x)));
+  document.querySelectorAll('#'+scope+'-alpn-selector .alpn-opt').forEach(btn=>btn.classList.toggle('active',selected.has(btn.dataset.value)));
+  const canonical=ALPN_ORDER.filter(x=>selected.has(x)).join(',');
+  document.getElementById(scope+'-alpn').value=canonical;
+  const info=document.getElementById(scope+'-alpn-effective');
+  if(info)info.textContent=canonical?'انتخاب ذخیره‌شده: '+canonical+' · خروجی ناسازگار به‌صورت خودکار امن می‌شود.':'حالت خودکار: WS = http/1.1 و XHTTP = h2,http/1.1';
+}
+function toggleAlpnOption(scope,btn){
+  btn.classList.toggle('active');
+  const values=[...document.querySelectorAll('#'+scope+'-alpn-selector .alpn-opt.active')].map(x=>x.dataset.value);
+  setAlpnValue(scope,values.join(','));
+  if(scope==='nl')document.querySelectorAll('#nl-alpn-selector').forEach(box=>box.closest('.cp-block').querySelectorAll('.chip').forEach(c=>c.classList.remove('active')));
+}
+function setAlpnProfile(scope,value,el){
+  setAlpnValue(scope,value);
+  if(el){el.closest('.chip-row').querySelectorAll('.chip').forEach(c=>c.classList.remove('active'));el.classList.add('active')}
 }
 const sb=document.getElementById('sb'),overlay=document.getElementById('overlay');
 function openSb(){sb.classList.add('open');overlay.classList.add('show')}
@@ -1852,6 +1882,7 @@ async function loadLinks(){
         ${protoBadge(l.protocol)}
         <span class="cfg-sub-tag" title="پورت اتصال"><i class="ti ti-route"></i> :${l.port||443}</span>
         <span class="cfg-sub-tag" title="Fingerprint"><i class="ti ti-fingerprint"></i> ${esc(l.fingerprint||'chrome')}</span>
+        <span class="cfg-sub-tag" title="ALPN مؤثر در خروجی"><i class="ti ti-antenna-bars-5"></i> ${esc(l.effective_alpn||'خودکار')}</span>
         <span class="cfg-sub-tag" title="آی‌پی‌های متصل / محدودیت"><i class="ti ti-users"></i> ${l.connected_ips||0}${l.ip_limit?('/'+l.ip_limit):' (∞)'}</span>
         <span class="cfg-sub-tag" title="محدودیت سرعت"><i class="ti ti-gauge"></i> ${l.speed_limit_bytes?((l.speed_limit_bytes*8/1024/1024).toFixed(1)+' Mbps'):'نامحدود'}</span>
         ${l.sub_id&&allSubsList.find(s=>s.sub_id===l.sub_id)?`<span class="cfg-sub-tag"><i class="ti ti-folder"></i> ${esc(allSubsList.find(s=>s.sub_id===l.sub_id).name)}</span>`:''}
@@ -1893,8 +1924,8 @@ async function createLink(){
     document.getElementById('nl-port').value='443';
     document.getElementById('nl-iplimit').value='0';
     document.getElementById('nl-speed').value='0';
-    document.getElementById('nl-alpn-preset').value='';
-    document.getElementById('nl-alpn').style.display='none';
+    setAlpnValue('nl','');
+    document.querySelectorAll('#nl-alpn-selector').forEach(box=>box.closest('.cp-block').querySelectorAll('.chip').forEach((c,i)=>c.classList.toggle('active',i===0)));
     toast('کانفیگ ساخته شد ✓','ok');loadLinks();
   }catch(e){toast('خطا در ساخت','err')}
 }
@@ -1908,7 +1939,7 @@ function openEditLink(uuid){
   else{document.getElementById('el-val').value=(l.limit_bytes/1024/1024).toFixed(0);document.getElementById('el-unit').value='MB';}
   document.getElementById('el-exp').value='';
   document.getElementById('el-fp').value=l.fingerprint||'chrome';
-  document.getElementById('el-alpn').value=l.alpn||'';
+  setAlpnValue('el',l.alpn||'');
   document.getElementById('el-port').value=l.port||443;
   document.getElementById('el-iplimit').value=l.ip_limit||0;
   if(!l.speed_limit_bytes){document.getElementById('el-speed').value='0';document.getElementById('el-speed-unit').value='MBIT';}

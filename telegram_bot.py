@@ -214,14 +214,20 @@ def _wizard_skip_kb(step_key: str, label: str):
         [{"text": "❌ انصراف", "callback_data": "w:cancel"}],
     ]}
 
-ALPN_PRESET_MAP = {"p1": "http/1.1", "p2": "h2,http/1.1", "p3": "h2"}
+ALPN_PRESET_MAP = {
+    "p1": "http/1.1",
+    "p2": "h2,http/1.1",
+    "p3": "h2",
+    "p4": "h3,h2,http/1.1",
+}
 
 def _wizard_alpn_kb():
     return {"inline_keyboard": [
         [{"text": "🔤 http/1.1 (پیشنهادی)", "callback_data": "w:alpnpreset:p1"}],
         [{"text": "🔤 h2,http/1.1", "callback_data": "w:alpnpreset:p2"}],
         [{"text": "🔤 h2", "callback_data": "w:alpnpreset:p3"}],
-        [{"text": "⏭ پیش‌فرض پروتکل", "callback_data": "w:skip:alpn"}],
+        [{"text": "🆕 h3 + h2 + http/1.1 (همه باهم)", "callback_data": "w:alpnpreset:p4"}],
+        [{"text": "⏭ پیش‌فرض امن پروتکل", "callback_data": "w:skip:alpn"}],
         [{"text": "❌ انصراف", "callback_data": "w:cancel"}],
     ]}
 
