@@ -4,6 +4,8 @@
 
 import asyncio
 import secrets
+import socket
+import time
 from datetime import datetime
 
 from fastapi import WebSocket, WebSocketDisconnect
@@ -28,7 +30,37 @@ from speed_limit import throttle
 # VLESS Relay — بهینه‌شده برای حداکثر throughput
 # ══════════════════════════════════════════════════════════════════════════════
 
-RELAY_BUF = 256 * 1024   # 256 KB buffer
+RELAY_BUF = 1024 * 1024       # 1 MB: فریم‌های کمتر و throughput بیشتر برای دانلود حجیم
+SOCK_BUF_SIZE = 4 * 1024 * 1024
+USAGE_BATCH = 1024 * 1024
+USAGE_INTERVAL = 0.15
+
+class _UsageGate:
+    """ثبت مصرف را batch می‌کند تا روی هر فریم قفل سراسری گرفته نشود."""
+    __slots__ = ("uid", "pending", "last", "ok")
+
+    def __init__(self, uid: str):
+        self.uid = uid
+        self.pending = 0
+        self.last = time.monotonic()
+        self.ok = True
+
+    async def add(self, n: int) -> bool:
+        if not self.ok:
+            return False
+        self.pending += n
+        now = time.monotonic()
+        if self.pending >= USAGE_BATCH or now - self.last >= USAGE_INTERVAL:
+            amount, self.pending = self.pending, 0
+            self.last = now
+            self.ok = await check_and_use(self.uid, amount)
+        return self.ok
+
+    async def flush(self):
+        if self.pending:
+            amount, self.pending = self.pending, 0
+            self.ok = self.ok and await check_and_use(self.uid, amount)
+        return self.ok
 
 def _ws_client_ip(ws: WebSocket) -> str:
     fwd = ws.headers.get("x-forwarded-for")
@@ -73,6 +105,7 @@ async def check_and_use(uid: str, n: int) -> bool:
     return True
 
 async def relay_ws_to_tcp(ws: WebSocket, writer: asyncio.StreamWriter, conn_id: str, uid: str):
+    gate = _UsageGate(uid)
     try:
         while True:
             msg = await ws.receive()
@@ -81,7 +114,7 @@ async def relay_ws_to_tcp(ws: WebSocket, writer: asyncio.StreamWriter, conn_id: 
             data = msg.get("bytes") or (msg.get("text") or "").encode()
             if not data:
                 continue
-            if not await check_and_use(uid, len(data)):
+            if not await gate.add(len(data)):
                 await ws.close(code=1008, reason="quota/disabled/unknown")
                 break
             await throttle(uid, len(data))
@@ -93,6 +126,7 @@ async def relay_ws_to_tcp(ws: WebSocket, writer: asyncio.StreamWriter, conn_id: 
     except (WebSocketDisconnect, Exception):
         pass
     finally:
+        await gate.flush()
         try:
             writer.write_eof()
         except Exception:
@@ -100,12 +134,13 @@ async def relay_ws_to_tcp(ws: WebSocket, writer: asyncio.StreamWriter, conn_id: 
 
 async def relay_tcp_to_ws(ws: WebSocket, reader: asyncio.StreamReader, conn_id: str, uid: str):
     first = True
+    gate = _UsageGate(uid)
     try:
         while True:
             data = await reader.read(RELAY_BUF)
             if not data:
                 break
-            if not await check_and_use(uid, len(data)):
+            if not await gate.add(len(data)):
                 await ws.close(code=1008, reason="quota/disabled/unknown")
                 break
             await throttle(uid, len(data))
@@ -115,6 +150,8 @@ async def relay_tcp_to_ws(ws: WebSocket, reader: asyncio.StreamReader, conn_id: 
             await ws.send_bytes(payload)
     except Exception:
         pass
+    finally:
+        await gate.flush()
 
 async def websocket_tunnel(ws: WebSocket, uuid: str):
     await ws.accept()
@@ -171,8 +208,10 @@ async def websocket_tunnel(ws: WebSocket, uuid: str):
         )
         sock = writer.transport.get_extra_info('socket')
         if sock:
-            import socket
             sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
+            sock.setsockopt(socket.SOL_SOCKET, socket.SO_SNDBUF, SOCK_BUF_SIZE)
+            sock.setsockopt(socket.SOL_SOCKET, socket.SO_RCVBUF, SOCK_BUF_SIZE)
+            sock.setsockopt(socket.SOL_SOCKET, socket.SO_KEEPALIVE, 1)
 
         if payload:
             writer.write(payload)

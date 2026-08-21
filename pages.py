@@ -936,7 +936,7 @@ a{color:inherit;text-decoration:none}
 <section class="pg" id="pg-links">
   <div class="topbar">
     <div><div class="tb-title"><i class="ti ti-link-plus"></i> کانفیگ‌ها</div><div class="tb-sub">ساخت و مدیریت کانفیگ با سهمیه، انقضا و گروه‌بندی</div></div>
-    <div class="tb-right"><span class="badge bg-blue" id="links-pg-cnt">۰ کانفیگ</span></div>
+    <div class="tb-right"><button class="btn btn-g" onclick="unlimitAllSpeeds()"><i class="ti ti-rocket"></i> حداکثر سرعت همه</button><span class="badge bg-blue" id="links-pg-cnt">۰ کانفیگ</span></div>
   </div>
   <div class="create-panel">
     <div class="cp-head">
@@ -1411,6 +1411,7 @@ a{color:inherit;text-decoration:none}
     <div class="sr" style="margin-top:10px"><span class="sr-k"><i class="ti ti-rss"></i> دامنه ثابت لینک ساب</span><span class="sr-v" id="backup-domain">تنظیم نشده</span></div>
     <div class="sr"><span class="sr-k"><i class="ti ti-server"></i> دامنه اتصال داخل کانفیگ‌ها</span><span class="sr-v" id="config-domain">دامنه Railway</span></div>
     <div class="cl amber" id="railway-domain-warning" style="display:none"><i class="ti ti-alert-triangle"></i><span>برای لینک ساب بهتر است دامنه اختصاصی ثابت باشد؛ دامنه موقت Railway قابل انتقال تضمینی نیست.</span></div>
+    <div class="cl amber"><i class="ti ti-shield-off"></i><span><b>اگر ساب بدون VPN آپدیت نمی‌شود:</b> در DNS/Cloudflare رکورد دامنه ساب را روی DNS only (ابر خاکستری) بگذار و Proxy را خاموش کن. همچنین دکمه «ساب Railway» کنار هر گروه، لینک مستقیم اضطراری بدون دامنه ثابت را می‌دهد.</span></div>
   </div>
 
   <div class="create-panel">
@@ -1891,7 +1892,8 @@ async function loadLinks(){
       <div class="cfg-actions">
         <button class="tog${allowed?' on':''}" onclick="toggleActive('${l.uuid}',${!l.active})" title="فعال/غیرفعال"></button>
         <button class="btn btn-sm btn-g btn-icon" onclick="navigator.clipboard.writeText('${esc(l.vless_link)}').then(()=>toast('لینک کپی شد','ok'))" title="کپی لینک"><i class="ti ti-copy"></i></button>
-        <button class="btn btn-sm btn-g btn-icon" onclick="navigator.clipboard.writeText('${esc(l.sub_url)}').then(()=>toast('Sub کپی شد','ok'))" title="Sub URL"><i class="ti ti-rss"></i></button>
+        <button class="btn btn-sm btn-g btn-icon" onclick="navigator.clipboard.writeText('${esc(l.sub_url)}').then(()=>toast('ساب ثابت کپی شد','ok'))" title="ساب ثابت"><i class="ti ti-rss"></i></button>
+        ${l.direct_sub_url&&l.direct_sub_url!==l.sub_url?`<button class="btn btn-sm btn-amber btn-icon" onclick="navigator.clipboard.writeText('${esc(l.direct_sub_url)}').then(()=>toast('ساب Railway کپی شد','ok'))" title="ساب مستقیم Railway"><i class="ti ti-server"></i></button>`:''}
         <button class="btn btn-sm btn-g btn-icon" onclick="showQR('${esc(l.vless_link)}')" title="QR"><i class="ti ti-qrcode"></i></button>
         <button class="btn btn-sm btn-amber btn-icon" onclick="openEditLink('${l.uuid}')" title="ویرایش"><i class="ti ti-edit"></i></button>
         <button class="btn btn-sm btn-g btn-icon" onclick="resetUsage('${l.uuid}')" title="ریست مصرف"><i class="ti ti-rotate"></i></button>
@@ -1974,6 +1976,14 @@ async function toggleActive(uuid,newState){
 async function resetUsage(uuid){
   try{const r=await authF('/api/links/'+uuid,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({reset_usage:true})});if(!r.ok)throw new Error();toast('مصرف ریست شد ✓','ok');loadLinks();}catch(e){toast('خطا','err')}
 }
+async function unlimitAllSpeeds(){
+  if(!confirm('محدودیت سرعت همه کانفیگ‌ها برداشته شود؟'))return;
+  try{
+    const r=await authF('/api/links/actions/unlimit-all',{method:'POST'}),d=await r.json().catch(()=>({}));
+    if(!r.ok)throw new Error(d.detail||'خطا');
+    toast('سرعت '+toFa(d.changed)+' کانفیگ نامحدود شد ✓','ok');loadLinks();
+  }catch(e){toast(e.message,'err')}
+}
 async function deleteLink(uuid){
   if(!confirm('حذف این کانفیگ؟'))return;
   try{const r=await authF('/api/links/'+uuid,{method:'DELETE'});if(!r.ok)throw new Error();toast('حذف شد ✓','ok');loadLinks();}catch(e){toast('خطا','err')}
@@ -2022,7 +2032,8 @@ function renderSubsGrid(subs){
       </div>
       <div class="sub-card-bottom">
         <button class="btn btn-sm btn-g" onclick="openSubLinks('${esc(s.sub_id)}','${esc(s.name)}')"><i class="ti ti-link-plus"></i> کانفیگ‌ها</button>
-        <button class="btn btn-sm btn-o" onclick="navigator.clipboard.writeText('${esc(s.sub_url)}').then(()=>toast('لینک ساب کپی شد','ok'))"><i class="ti ti-rss"></i> ساب</button>
+        <button class="btn btn-sm btn-o" onclick="navigator.clipboard.writeText('${esc(s.sub_url)}').then(()=>toast('لینک ساب ثابت کپی شد','ok'))"><i class="ti ti-rss"></i> ساب ثابت</button>
+        ${s.direct_sub_url&&s.direct_sub_url!==s.sub_url?`<button class="btn btn-sm btn-amber" onclick="navigator.clipboard.writeText('${esc(s.direct_sub_url)}').then(()=>toast('ساب مستقیم Railway کپی شد','ok'))" title="برای زمانی که دامنه ثابت بدون VPN باز نمی‌شود"><i class="ti ti-server"></i> ساب Railway</button>`:''}
         <button class="btn btn-sm btn-g btn-icon" onclick="showQR('${esc(s.sub_url)}')" title="QR"><i class="ti ti-qrcode"></i></button>
         <button class="btn btn-sm btn-d btn-icon" onclick="deleteSub('${esc(s.sub_id)}')" title="حذف"><i class="ti ti-trash"></i></button>
       </div>
@@ -2133,7 +2144,8 @@ async function loadSubsPage(){
           <div style="font-size:10px;color:var(--t3);margin-top:3px">${toFa(s.links_count)} کانفیگ · ${esc(s.total_used_fmt)} مصرف ${s.has_password?'· 🔒 رمزدار':''}</div>
         </div>
         <div style="display:flex;gap:5px;flex-wrap:wrap">
-          <button class="btn btn-sm btn-pur" onclick="navigator.clipboard.writeText('${esc(s.sub_url)}').then(()=>toast('کپی شد','ok'))"><i class="ti ti-copy"></i> ساب</button>
+          <button class="btn btn-sm btn-pur" onclick="navigator.clipboard.writeText('${esc(s.sub_url)}').then(()=>toast('کپی شد','ok'))"><i class="ti ti-copy"></i> ساب ثابت</button>
+          ${s.direct_sub_url&&s.direct_sub_url!==s.sub_url?`<button class="btn btn-sm btn-amber" onclick="navigator.clipboard.writeText('${esc(s.direct_sub_url)}').then(()=>toast('ساب Railway کپی شد','ok'))"><i class="ti ti-server"></i> مستقیم Railway</button>`:''}
           <button class="btn btn-sm btn-pur" onclick="navigator.clipboard.writeText('${esc(s.public_url)}').then(()=>toast('کپی شد','ok'))"><i class="ti ti-globe"></i> پابلیک</button>
           <button class="btn btn-sm btn-g" onclick="showQR('${esc(s.sub_url)}')"><i class="ti ti-qrcode"></i></button>
         </div>

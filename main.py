@@ -5,6 +5,7 @@ import hashlib
 import secrets
 import time
 import re
+import sys
 import aiofiles
 from datetime import datetime, timedelta
 from copy import deepcopy
@@ -26,6 +27,11 @@ logger = logging.getLogger("X4G")
 IRAN_TZ = ZoneInfo("Asia/Tehran")
 
 app = FastAPI(title="X4G", docs_url=None, redoc_url=None)
+
+# وقتی فایل با `python main.py` اجرا می‌شود، ماژول‌های relay دوباره `main` را import
+# می‌کنند. این alias از اجرای دوباره فایل و circular import جلوگیری می‌کند.
+if __name__ == "__main__":
+    sys.modules.setdefault("main", sys.modules[__name__])
 
 # ── Persistence ───────────────────────────────────────────────────────────────
 DATA_DIR = Path(os.environ.get("DATA_DIR", "/data"))
@@ -838,8 +844,15 @@ async def subscription_single(uuid: str, request: Request):
     host = get_host(request)
     vless = vless_link_for_link(link, uuid, host)
     content = base64.b64encode(vless.encode()).decode()
-    return Response(content=content, media_type="text/plain",
-                    headers={"profile-title": quote(link["label"]), "support-url": "https://t.me/Farajian2004f"})
+    return Response(content=content, media_type="text/plain; charset=utf-8",
+                    headers={
+                        "profile-title": quote(link["label"]),
+                        "support-url": "https://t.me/Farajian2004f",
+                        "profile-update-interval": "1",
+                        "cache-control": "no-store, no-cache, must-revalidate",
+                        "cdn-cache-control": "no-store",
+                        "access-control-allow-origin": "*",
+                    })
 
 @app.get("/sub-all")
 async def subscription_all(request: Request, _=Depends(require_auth)):
@@ -878,16 +891,19 @@ async def create_sub(request: Request, _=Depends(require_auth)):
     asyncio.create_task(save_state())
     log_activity("sub", f"گروه «{name}» ساخته شد", "ok")
     sub_base = get_subscription_base(request)
+    direct_base = f"https://{get_host(request)}"
     return {
         "sub_id": sub_id,
         **SUBS[sub_id],
         "public_url": f"{sub_base}/p/{uuid_key}",
         "sub_url": f"{sub_base}/sub-group/{uuid_key}",
+        "direct_sub_url": f"{direct_base}/sub-group/{uuid_key}",
     }
 
 @app.get("/api/subs")
 async def list_subs(request: Request, _=Depends(require_auth)):
     sub_base = get_subscription_base(request)
+    direct_base = f"https://{get_host(request)}"
     async with SUBS_LOCK:
         snap_subs = dict(SUBS)
     async with LINKS_LOCK:
@@ -908,6 +924,7 @@ async def list_subs(request: Request, _=Depends(require_auth)):
             "total_used_fmt": fmt_bytes(total_used),
             "public_url": f"{sub_base}/p/{s['uuid_key']}",
             "sub_url": f"{sub_base}/sub-group/{s['uuid_key']}",
+            "direct_sub_url": f"{direct_base}/sub-group/{s['uuid_key']}",
         })
     result.sort(key=lambda x: x["created_at"], reverse=True)
     return {"subs": result}
@@ -998,7 +1015,10 @@ async def sub_group_subscription(uuid_key: str, request: Request):
         headers={
             "profile-title": quote(sub["name"]),
             "support-url": "https://t.me/Farajian2004f",
-            "profile-update-interval": "12",
+            "profile-update-interval": "1",
+            "cache-control": "no-store, no-cache, must-revalidate",
+            "cdn-cache-control": "no-store",
+            "access-control-allow-origin": "*",
         }
     )
 
@@ -1616,6 +1636,7 @@ async def create_link(request: Request, _=Depends(require_auth)):
         "effective_alpn": effective_alpn_for_protocol(link.get("protocol", DEFAULT_PROTOCOL), link.get("alpn")),
         "vless_link": vless_link_for_link(link, uid, host),
         "sub_url": f"{sub_base}/sub/{uid}",
+        "direct_sub_url": f"https://{host}/sub/{uid}",
     }
 
 @app.get("/api/links")
@@ -1635,6 +1656,7 @@ async def list_links(request: Request, _=Depends(require_auth)):
             "effective_alpn": effective_alpn_for_protocol(proto, d.get("alpn")),
             "vless_link": vless_link_for_link(d, uid, host),
             "sub_url": f"{sub_base}/sub/{uid}",
+            "direct_sub_url": f"https://{host}/sub/{uid}",
             "connected_ips": len(unique_ips_for_uuid(uid)),
         })
     result.sort(key=lambda x: x["created_at"], reverse=True)
@@ -1708,6 +1730,20 @@ async def update_link(uid: str, request: Request, _=Depends(require_auth)):
 
     asyncio.create_task(save_state())
     return {"ok": True}
+
+@app.post("/api/links/actions/unlimit-all")
+async def unlimit_all_link_speeds(_=Depends(require_auth)):
+    from speed_limit import reset_bucket
+    changed = 0
+    async with LINKS_LOCK:
+        for uid, link in LINKS.items():
+            if int(link.get("speed_limit_bytes", 0) or 0) > 0:
+                link["speed_limit_bytes"] = 0
+                reset_bucket(uid)
+                changed += 1
+    await save_state()
+    log_activity("link", f"محدودیت سرعت {changed} کانفیگ برداشته شد", "ok")
+    return {"ok": True, "changed": changed, "message": "همه کانفیگ‌ها روی سرعت نامحدود قرار گرفتند"}
 
 @app.delete("/api/links/{uid}")
 async def delete_link(uid: str, _=Depends(require_auth)):
@@ -1853,4 +1889,9 @@ async def test_ws_redirect():
     return HTMLResponse(content="<script>location.href='/dashboard'</script>")
 
 if __name__ == "__main__":
-    uvicorn.run("main:app", host="0.0.0.0", port=CONFIG["port"], log_level="info", workers=1)
+    uvicorn.run(
+        app, host="0.0.0.0", port=CONFIG["port"], log_level="info",
+        backlog=2048, timeout_keep_alive=30, ws_max_size=16 * 1024 * 1024,
+        ws_max_queue=64, ws_ping_interval=20.0, ws_ping_timeout=20.0,
+        ws_per_message_deflate=False,  # داده تونل از قبل فشرده است؛ حذف CPU اضافه
+    )
